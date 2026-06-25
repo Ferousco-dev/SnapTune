@@ -46,6 +46,9 @@ dependencies:
   # Functional programming (Either / Option)
   dartz: ^0.10.1
 
+  # Fonts
+  google_fonts: ^6.2.1
+
   # Utilities
   intl: ^0.20.2
   mime: ^2.0.0
