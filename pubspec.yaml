@@ -1,0 +1,64 @@
+name: snaptune
+description: Perfect before you share.
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.8
+  flutter: ">=3.38.9"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management
+  flutter_bloc: ^9.1.1
+  equatable: ^2.0.7
+
+  # Dependency injection
+  get_it: ^8.0.3
+
+  # Navigation
+  go_router: ^14.8.1
+
+  # Gallery / media access
+  photo_manager: ^3.6.3
+
+  # Video processing (native FFmpeg)
+  ffmpeg_kit_flutter_min: ^6.0.3
+
+  # Image processing in Dart
+  image: ^4.3.0
+
+  # File system
+  path_provider: ^2.1.5
+  path: ^1.9.1
+
+  # Permissions
+  permission_handler: ^11.4.0
+
+  # Sharing
+  share_plus: ^10.1.4
+
+  # Video playback
+  video_player: ^2.9.2
+
+  # Functional programming (Either / Option)
+  dartz: ^0.10.1
+
+  # Utilities
+  intl: ^0.20.2
+  mime: ^2.0.0
+  uuid: ^4.5.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/icons/
