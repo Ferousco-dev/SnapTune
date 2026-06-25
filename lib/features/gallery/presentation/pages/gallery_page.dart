@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/di/service_locator.dart';
+import '../../../../core/router/routes.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../viewer/presentation/pages/viewer_page.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../domain/entities/media_item.dart';
@@ -190,7 +193,6 @@ class _MediaGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Group items by month
     final grouped = _groupByMonth(items);
 
     return SliverList(
@@ -199,7 +201,8 @@ class _MediaGrid extends StatelessWidget {
           final entry = grouped.entries.elementAt(sectionIndex);
           return _MonthSection(
             label: entry.key,
-            items: entry.value,
+            sectionItems: entry.value,
+            allItems: items,
           );
         },
         childCount: grouped.length,
@@ -219,8 +222,14 @@ class _MediaGrid extends StatelessWidget {
 
 class _MonthSection extends StatelessWidget {
   final String label;
-  final List<MediaItem> items;
-  const _MonthSection({required this.label, required this.items});
+  final List<MediaItem> sectionItems;
+  final List<MediaItem> allItems;
+
+  const _MonthSection({
+    required this.label,
+    required this.sectionItems,
+    required this.allItems,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -248,11 +257,18 @@ class _MonthSection extends StatelessWidget {
             mainAxisSpacing: 2,
             crossAxisSpacing: 2,
           ),
-          itemCount: items.length,
-          itemBuilder: (_, i) => MediaThumbnail(
-            item: items[i],
-            onTap: () {},
-          ),
+          itemCount: sectionItems.length,
+          itemBuilder: (_, i) {
+            final item = sectionItems[i];
+            final globalIndex = allItems.indexOf(item);
+            return MediaThumbnail(
+              item: item,
+              onTap: () => context.push(
+                Routes.viewer,
+                extra: ViewerArgs(items: allItems, startIndex: globalIndex),
+              ),
+            );
+          },
         ),
       ],
     );
