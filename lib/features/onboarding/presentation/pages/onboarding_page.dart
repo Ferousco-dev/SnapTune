@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/di/service_locator.dart';
 import '../../../../core/router/routes.dart';
+import '../../../../core/services/prefs_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_radius.dart';
@@ -46,11 +48,17 @@ class _OnboardingPageState extends State<OnboardingPage> {
         curve: Curves.easeInOut,
       );
     } else {
-      context.go(Routes.gallery);
+      _finish();
     }
   }
 
-  void _skip() => context.go(Routes.gallery);
+  void _skip() => _finish();
+
+  Future<void> _finish() async {
+    await sl<PrefsService>().setOnboardingDone();
+    if (!mounted) return;
+    context.go(Routes.gallery);
+  }
 
   @override
   void dispose() {
