@@ -40,19 +40,17 @@ class IllustrationGallery extends StatelessWidget {
             ),
           ],
         ),
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(16),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: List.generate(3, (row) {
-            return Padding(
-              padding: EdgeInsets.only(bottom: row < 2 ? 8 : 0),
-              child: Row(
-                children: List.generate(3, (col) {
-                  return Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.only(right: col < 2 ? 8 : 0),
-                      child: AspectRatio(
-                        aspectRatio: 1,
+            return Expanded(
+              child: Container(
+                margin: EdgeInsets.only(bottom: row < 2 ? 7 : 0),
+                child: Row(
+                  children: List.generate(3, (col) {
+                    return Expanded(
+                      child: Container(
+                        margin: EdgeInsets.only(right: col < 2 ? 7 : 0),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(11),
                           child: CustomPaint(
@@ -61,9 +59,9 @@ class IllustrationGallery extends StatelessWidget {
                           ),
                         ),
                       ),
-                    ),
-                  );
-                }),
+                    );
+                  }),
+                ),
               ),
             );
           }),
