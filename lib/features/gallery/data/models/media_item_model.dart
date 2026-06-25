@@ -22,7 +22,7 @@ class MediaItemModel extends MediaItem {
       createDate: asset.createDateTime,
       width: asset.width,
       height: asset.height,
-      size: asset.size,
+      size: 0,
       duration: asset.duration,
       mimeType: asset.mimeType,
     );
