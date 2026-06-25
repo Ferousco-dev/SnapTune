@@ -158,6 +158,7 @@ class _FilterBar extends StatelessWidget {
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: isActive
                       ? AppColors.primary
