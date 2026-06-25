@@ -1,7 +1,9 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/di/service_locator.dart';
 import '../../../../core/router/routes.dart';
+import '../../../../core/services/prefs_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 
@@ -63,7 +65,8 @@ class _SplashPageState extends State<SplashPage>
   Future<void> _navigateAfter() async {
     await Future.delayed(const Duration(milliseconds: 2400));
     if (!mounted) return;
-    context.go(Routes.onboarding);
+    final done = sl<PrefsService>().isOnboardingDone;
+    context.go(done ? Routes.gallery : Routes.onboarding);
   }
 
   @override
