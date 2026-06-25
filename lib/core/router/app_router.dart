@@ -40,7 +40,7 @@ CustomTransitionPage<void> _fadeTransition(
       key: state.pageKey,
       child: child,
       transitionDuration: const Duration(milliseconds: 300),
-      transitionsBuilder: (_, animation, __, child) => FadeTransition(
+      transitionsBuilder: (_, animation, _, child) => FadeTransition(
         opacity: animation,
         child: child,
       ),

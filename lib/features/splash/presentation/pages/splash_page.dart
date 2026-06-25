@@ -112,7 +112,7 @@ class _SplashPageState extends State<SplashPage>
             Center(
               child: AnimatedBuilder(
                 animation: _orbitController,
-                builder: (_, __) => SizedBox(
+                builder: (_, _) => SizedBox(
                   width: 260,
                   height: 260,
                   child: _SparkleOrbit(progress: _orbitController.value),

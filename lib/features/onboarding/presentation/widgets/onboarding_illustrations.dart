@@ -122,7 +122,7 @@ class _IllustrationOptimizeState extends State<IllustrationOptimize>
               // Waveform bars
               AnimatedBuilder(
                 animation: _barAnim,
-                builder: (_, __) => Row(
+                builder: (_, _) => Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: List.generate(barHeights.length, (i) {
