@@ -46,6 +46,9 @@ dependencies:
   # Fonts
   google_fonts: ^6.2.1
 
+  # Preferences
+  shared_preferences: ^2.3.5
+
   # Utilities
   intl: ^0.20.2
   mime: ^2.0.0
