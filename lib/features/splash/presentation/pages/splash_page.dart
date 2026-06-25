@@ -136,24 +136,24 @@ class _SplashPageState extends State<SplashPage>
                   children: [
                     // Logo with white-tinted shadow
                     Container(
-                      width: 88,
-                      height: 88,
+                      width: 140,
+                      height: 140,
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(24),
+                        borderRadius: BorderRadius.circular(36),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withAlpha(50),
-                            blurRadius: 32,
-                            offset: const Offset(0, 12),
+                            color: Colors.black.withAlpha(60),
+                            blurRadius: 40,
+                            offset: const Offset(0, 16),
                           ),
                         ],
                       ),
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(24),
+                        borderRadius: BorderRadius.circular(36),
                         child: Image.asset(
                           'assets/images/logo.png',
-                          width: 88,
-                          height: 88,
+                          width: 140,
+                          height: 140,
                           fit: BoxFit.cover,
                         ),
                       ),
