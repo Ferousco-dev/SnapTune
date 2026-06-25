@@ -7,6 +7,7 @@ import '../../features/albums/presentation/pages/albums_page.dart';
 import '../../features/optimize/presentation/pages/optimize_page.dart';
 import '../../features/favorites/presentation/pages/favorites_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
+import '../../features/viewer/presentation/pages/viewer_page.dart';
 import '../../shared/widgets/app_shell.dart';
 import 'routes.dart';
 
@@ -21,6 +22,13 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: Routes.onboarding,
       pageBuilder: (_, state) => _fade(state, const OnboardingPage()),
+    ),
+    GoRoute(
+      path: Routes.viewer,
+      pageBuilder: (_, state) {
+        final args = state.extra as ViewerArgs;
+        return _fade(state, ViewerPage(args: args));
+      },
     ),
     ShellRoute(
       builder: (_, _, child) => AppShell(child: child),
