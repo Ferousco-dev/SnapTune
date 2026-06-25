@@ -24,9 +24,6 @@ dependencies:
   # Gallery / media access
   photo_manager: ^3.6.3
 
-  # Video processing (native FFmpeg)
-  ffmpeg_kit_flutter_min: ^6.0.3
-
   # Image processing in Dart
   image: ^4.3.0
 
