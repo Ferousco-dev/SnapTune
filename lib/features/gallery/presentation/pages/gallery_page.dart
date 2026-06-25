@@ -142,7 +142,7 @@ class _FilterBar extends StatelessWidget {
 
     return SliverToBoxAdapter(
       child: SizedBox(
-        height: 44,
+        height: 38,
         child: ListView.separated(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
@@ -157,12 +157,12 @@ class _FilterBar extends StatelessWidget {
                   .add(GalleryFilterChanged(entry.value)),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 decoration: BoxDecoration(
                   color: isActive
                       ? AppColors.primary
                       : (isDark ? AppColors.darkSurfaceVariant : AppColors.surfaceVariant),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
                   entry.key,
