@@ -157,14 +157,12 @@ class _FilterBar extends StatelessWidget {
                   .add(GalleryFilterChanged(entry.value)),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                constraints: const BoxConstraints(minWidth: 64),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                alignment: Alignment.center,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                 decoration: BoxDecoration(
                   color: isActive
                       ? AppColors.primary
                       : (isDark ? AppColors.darkSurfaceVariant : AppColors.surfaceVariant),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
                   entry.key,
