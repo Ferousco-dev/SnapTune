@@ -1,4 +1,6 @@
 import 'package:get_it/get_it.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../services/prefs_service.dart';
 import '../../features/gallery/data/datasources/gallery_local_datasource.dart';
 import '../../features/gallery/data/repositories/gallery_repository_impl.dart';
 import '../../features/gallery/domain/repositories/gallery_repository.dart';
@@ -9,6 +11,9 @@ import '../../features/gallery/presentation/bloc/gallery_bloc.dart';
 final GetIt sl = GetIt.instance;
 
 Future<void> initDependencies() async {
+  final prefs = await SharedPreferences.getInstance();
+  sl.registerSingleton<PrefsService>(PrefsService(prefs));
+
   _registerGalleryDependencies();
 }
 
