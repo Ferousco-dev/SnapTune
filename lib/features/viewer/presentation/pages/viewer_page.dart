@@ -109,21 +109,19 @@ class _ViewerPageState extends State<ViewerPage> {
 
     return Scaffold(
       backgroundColor: Colors.black,
-      body: GestureDetector(
-        onVerticalDragStart: _onDragStart,
-        onVerticalDragUpdate: _onDragUpdate,
-        onVerticalDragEnd: _onDragEnd,
-        behavior: HitTestBehavior.translucent,
-        child: Transform.translate(
-          offset: Offset(0, _dragOffset),
-          child: Opacity(
-            opacity: dismissOpacity.clamp(0.0, 1.0),
-            child: Stack(
-              children: [
-                GestureDetector(
-                  onTap: _toggleOverlays,
-                  behavior: HitTestBehavior.opaque,
-                  child: PageView.builder(
+      body: Transform.translate(
+        offset: Offset(0, _dragOffset),
+        child: Opacity(
+          opacity: dismissOpacity.clamp(0.0, 1.0),
+          child: Stack(
+            children: [
+              GestureDetector(
+                onTap: _toggleOverlays,
+                onVerticalDragStart: _onDragStart,
+                onVerticalDragUpdate: _onDragUpdate,
+                onVerticalDragEnd: _onDragEnd,
+                behavior: HitTestBehavior.opaque,
+                child: PageView.builder(
                     controller: _pageController,
                     physics: _photoZoomed
                         ? const NeverScrollableScrollPhysics()
@@ -177,8 +175,7 @@ class _ViewerPageState extends State<ViewerPage> {
                     child: _BottomBar(item: currentItem),
                   ),
                 ),
-              ],
-            ),
+            ],
           ),
         ),
       ),
