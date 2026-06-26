@@ -11,6 +11,44 @@ import '../../../gallery/domain/entities/media_item.dart';
 import '../../../gallery/presentation/widgets/media_thumbnail.dart';
 import '../../../viewer/presentation/pages/viewer_page.dart';
 
+// Maps well-known album names to a sort priority (lower = first)
+int _albumPriority(String name) {
+  final n = name.toLowerCase().trim();
+  if (n == 'camera roll' || n == 'recents' || n == 'camera' || n == 'dcim') return 0;
+  if (n == 'screenshots' || n == 'screenshot') return 1;
+  if (n.startsWith('whatsapp')) return 2;
+  if (n.contains('instagram')) return 3;
+  if (n == 'videos') return 4;
+  if (n == 'selfies') return 5;
+  if (n == 'favorites') return 6;
+  if (n.contains('snapchat') || n.contains('telegram') || n.contains('twitter')) return 7;
+  if (n.contains('tiktok')) return 8;
+  if (n == 'live photos') return 9;
+  return 50;
+}
+
+IconData _albumTypeIcon(String name) {
+  final n = name.toLowerCase().trim();
+  if (n == 'screenshots' || n == 'screenshot') return Icons.screenshot_monitor_rounded;
+  if (n.startsWith('whatsapp')) return Icons.chat_bubble_rounded;
+  if (n.contains('instagram')) return Icons.camera_alt_rounded;
+  if (n == 'videos') return Icons.videocam_rounded;
+  if (n == 'selfies') return Icons.face_rounded;
+  if (n == 'favorites') return Icons.favorite_rounded;
+  if (n == 'camera roll' || n == 'recents' || n == 'camera') return Icons.camera_rounded;
+  if (n.contains('snapchat')) return Icons.wb_sunny_rounded;
+  if (n.contains('telegram')) return Icons.send_rounded;
+  if (n.contains('twitter') || n == 'x') return Icons.alternate_email_rounded;
+  if (n.contains('tiktok')) return Icons.music_note_rounded;
+  if (n == 'live photos') return Icons.motion_photos_on_rounded;
+  if (n.contains('panorama') || n.contains('pano')) return Icons.panorama_rounded;
+  if (n.contains('portrait')) return Icons.portrait_rounded;
+  if (n.contains('slow')) return Icons.slow_motion_video_rounded;
+  if (n.contains('burst')) return Icons.burst_mode_rounded;
+  if (n.contains('download')) return Icons.download_rounded;
+  return Icons.photo_album_outlined;
+}
+
 class AlbumsPage extends StatefulWidget {
   const AlbumsPage({super.key});
 
@@ -29,14 +67,24 @@ class _AlbumsPageState extends State<AlbumsPage> {
   }
 
   Future<void> _load() async {
-    final albums = await PhotoManager.getAssetPathList(
+    final raw = await PhotoManager.getAssetPathList(
       type: RequestType.common,
       onlyAll: false,
     );
-    final filtered = albums.where((a) => !a.isAll).toList();
+    final candidates = raw.where((a) => !a.isAll).toList();
+    // Load counts in parallel so we can drop empty albums immediately
+    final counted = await Future.wait(
+      candidates.map((a) async => (album: a, count: await a.assetCountAsync)),
+    );
+    final nonEmpty = counted.where((r) => r.count > 0).toList()
+      ..sort((a, b) {
+        final diff =
+            _albumPriority(a.album.name) - _albumPriority(b.album.name);
+        return diff != 0 ? diff : a.album.name.compareTo(b.album.name);
+      });
     if (!mounted) return;
     setState(() {
-      _albums = filtered;
+      _albums = nonEmpty.map((r) => r.album).toList();
       _loading = false;
     });
   }
@@ -180,15 +228,27 @@ class _AlbumCardState extends State<_AlbumCard> {
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            widget.album.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTypography.dmSans(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: theme.colorScheme.onSurface,
-            ),
+          Row(
+            children: [
+              Icon(
+                _albumTypeIcon(widget.album.name),
+                size: 13,
+                color: AppColors.primary,
+              ),
+              const SizedBox(width: 5),
+              Expanded(
+                child: Text(
+                  widget.album.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.dmSans(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 2),
           Text(
