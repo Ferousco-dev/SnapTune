@@ -24,6 +24,7 @@ class _PeoplePageState extends State<PeoplePage> {
   _ScanStatus _status = _ScanStatus.idle;
   int _total = 0;
   int _processed = 0;
+  bool _cancelled = false;
 
   final List<MediaItem> _solo = [];
   final List<MediaItem> _together = [];
@@ -33,11 +34,18 @@ class _PeoplePageState extends State<PeoplePage> {
 
   @override
   void dispose() {
+    _cancelled = true;
     _service.close();
     super.dispose();
   }
 
+  void _cancelScan() {
+    _cancelled = true;
+    setState(() => _status = _ScanStatus.idle);
+  }
+
   Future<void> _startScan() async {
+    _cancelled = false;
     setState(() {
       _status = _ScanStatus.scanning;
       _processed = 0;
@@ -50,22 +58,25 @@ class _PeoplePageState extends State<PeoplePage> {
       type: RequestType.image,
       onlyAll: true,
     );
-    if (paths.isEmpty || !mounted) {
-      if (mounted) setState(() => _status = _ScanStatus.done);
+    if (_cancelled || paths.isEmpty || !mounted) {
+      if (mounted && !_cancelled) setState(() => _status = _ScanStatus.done);
       return;
     }
 
     final total = await paths.first.assetCountAsync;
-    if (!mounted) return;
+    if (_cancelled || !mounted) return;
     setState(() => _total = total);
 
     const batchSize = 10;
     for (int start = 0; start < total; start += batchSize) {
+      if (_cancelled || !mounted) return;
       final end = (start + batchSize).clamp(0, total);
       final assets = await paths.first.getAssetListRange(
           start: start, end: end);
       for (final asset in assets) {
+        if (_cancelled || !mounted) return;
         final count = await _service.countFaces(asset);
+        if (_cancelled || !mounted) return;
         final item = MediaItemModel.fromAsset(asset);
         if (count == 1) {
           _solo.add(item);
@@ -74,14 +85,13 @@ class _PeoplePageState extends State<PeoplePage> {
         } else if (count >= 3) {
           _group.add(item);
         }
-        if (mounted) setState(() => _processed++);
+        setState(() => _processed++);
         // Yield so Flutter can repaint between each photo
         await Future.delayed(Duration.zero);
       }
-      if (!mounted) return;
     }
 
-    if (mounted) setState(() => _status = _ScanStatus.done);
+    if (!_cancelled && mounted) setState(() => _status = _ScanStatus.done);
   }
 
   @override
@@ -106,6 +116,18 @@ class _PeoplePageState extends State<PeoplePage> {
           ),
         ),
         actions: [
+          if (_status == _ScanStatus.scanning)
+            TextButton(
+              onPressed: _cancelScan,
+              child: Text(
+                'Cancel',
+                style: AppTypography.dmSans(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.primary,
+                ),
+              ),
+            ),
           if (_status == _ScanStatus.done)
             TextButton(
               onPressed: _startScan,
@@ -188,7 +210,7 @@ class _IdleBody extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Person identity recognition (grouping the same person across photos) coming in a future update.',
+              'Person identity recognition coming in a future update.',
               style: AppTypography.dmSans(
                 fontSize: 12,
                 color: Theme.of(context).colorScheme.onSurfaceVariant.withAlpha(180),
