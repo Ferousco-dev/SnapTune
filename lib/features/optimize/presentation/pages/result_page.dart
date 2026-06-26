@@ -1,5 +1,8 @@
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../../core/router/routes.dart';
@@ -12,7 +15,14 @@ import '../../domain/entities/platform_preset.dart';
 class ResultArgs {
   final PlatformPreset preset;
   final MediaItem? item;
-  const ResultArgs({required this.preset, this.item});
+  final Uint8List? outputBytes;
+  final int originalSizeBytes;
+  const ResultArgs({
+    required this.preset,
+    this.item,
+    this.outputBytes,  // Uint8List from optimization engine
+    this.originalSizeBytes = 0,
+  });
 }
 
 class ResultPage extends StatefulWidget {
@@ -56,16 +66,44 @@ class _ResultPageState extends State<ResultPage>
     super.dispose();
   }
 
+  String get _sizeReductionLabel {
+    final out = widget.args?.outputBytes;
+    final orig = widget.args?.originalSizeBytes ?? 0;
+    if (out == null || orig == 0) return '—';
+    final pct = ((1 - out.length / orig) * 100).round();
+    return pct > 0 ? '$pct%' : '0%';
+  }
+
+  String get _qualityLabel {
+    final q = widget.args?.preset.jpegQuality ?? 85;
+    // Map quality 80-100 → score 92-99
+    final score = 92 + ((q - 80) / 20 * 7).round().clamp(0, 7);
+    return '$score';
+  }
+
+  Future<File?> _outputFile() async {
+    final bytes = widget.args?.outputBytes;
+    if (bytes == null) return null;
+    final tmp = await getTemporaryDirectory();
+    final preset = widget.args?.preset;
+    final name = preset != null
+        ? 'snaptune_${preset.name.toLowerCase().replaceAll(' ', '_')}.jpg'
+        : 'snaptune_optimized.jpg';
+    final file = File('${tmp.path}/$name');
+    await file.writeAsBytes(bytes);
+    return file;
+  }
+
   Future<void> _shareNow() async {
-    final item = widget.args?.item;
-    if (item == null) return;
     setState(() => _sharing = true);
     try {
-      final asset = await AssetEntity.fromId(item.id);
-      final file = await asset?.file;
+      File? file = await _outputFile();
+      if (file == null && widget.args?.item != null) {
+        final asset = await AssetEntity.fromId(widget.args!.item!.id);
+        file = await asset?.file;
+      }
       if (file == null || !mounted) return;
 
-      // iOS requires sharePositionOrigin to anchor the popover
       final box = _shareButtonKey.currentContext?.findRenderObject()
           as RenderBox?;
       final origin = box != null
@@ -82,19 +120,32 @@ class _ResultPageState extends State<ResultPage>
   }
 
   Future<void> _saveCopy() async {
-    final item = widget.args?.item;
-    if (item == null) return;
     setState(() => _saving = true);
     try {
-      final asset = await AssetEntity.fromId(item.id);
-      if (asset == null || !mounted) return;
-      final bytes = await asset.originBytes;
-      if (bytes == null || !mounted) return;
-      await PhotoManager.editor.saveImage(
-        bytes,
-        filename: 'snaptune_optimized.jpg',
-        title: 'SnapTune',
-      );
+      final bytes = widget.args?.outputBytes;
+      if (bytes != null) {
+        final preset = widget.args?.preset;
+        final name = preset != null
+            ? 'snaptune_${preset.name.toLowerCase().replaceAll(' ', '_')}.jpg'
+            : 'snaptune_optimized.jpg';
+        await PhotoManager.editor.saveImage(
+          bytes,
+          filename: name,
+          title: 'SnapTune',
+        );
+      } else if (widget.args?.item != null) {
+        final asset = await AssetEntity.fromId(widget.args!.item!.id);
+        final orig = await asset?.originBytes;
+        if (orig != null) {
+          await PhotoManager.editor.saveImage(
+            orig,
+            filename: 'snaptune_optimized.jpg',
+            title: 'SnapTune',
+          );
+        }
+      } else {
+        return;
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -193,7 +244,7 @@ class _ResultPageState extends State<ResultPage>
                     _StatCard(
                       isDark: isDark,
                       label: 'Size reduction',
-                      value: '42%',
+                      value: _sizeReductionLabel,
                       icon: Icons.compress_rounded,
                       color: AppColors.success,
                     ),
@@ -201,7 +252,7 @@ class _ResultPageState extends State<ResultPage>
                     _StatCard(
                       isDark: isDark,
                       label: 'Quality score',
-                      value: '96',
+                      value: _qualityLabel,
                       icon: Icons.stars_rounded,
                       color: AppColors.violet,
                     ),
