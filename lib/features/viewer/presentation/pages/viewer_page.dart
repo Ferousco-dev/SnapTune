@@ -29,6 +29,7 @@ class _ViewerPageState extends State<ViewerPage> {
   late final PageController _pageController;
   late int _currentIndex;
   bool _overlaysVisible = true;
+  final Set<String> _likedIds = {};
 
   @override
   void initState() {
@@ -48,16 +49,35 @@ class _ViewerPageState extends State<ViewerPage> {
   void _toggleOverlays() =>
       setState(() => _overlaysVisible = !_overlaysVisible);
 
+  void _toggleLike(String id) {
+    setState(() {
+      if (_likedIds.contains(id)) {
+        _likedIds.remove(id);
+      } else {
+        _likedIds.add(id);
+        HapticFeedback.lightImpact();
+      }
+    });
+  }
+
+  void _showOptions(MediaItem item) {
+    HapticFeedback.selectionClick();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ViewerOptionsSheet(item: item),
+    );
+  }
+
   List<MediaItem> get _items => widget.args.items;
 
   @override
   Widget build(BuildContext context) {
+    final currentItem = _items[_currentIndex];
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Page view — GestureDetector wraps it so taps toggle overlays
-          // without blocking horizontal swipe
           GestureDetector(
             onTap: _toggleOverlays,
             behavior: HitTestBehavior.opaque,
@@ -69,7 +89,6 @@ class _ViewerPageState extends State<ViewerPage> {
             ),
           ),
 
-          // Top overlay — Positioned directly in Stack, AnimatedOpacity handles fade
           Positioned(
             top: 0,
             left: 0,
@@ -80,11 +99,13 @@ class _ViewerPageState extends State<ViewerPage> {
               child: _TopBar(
                 currentIndex: _currentIndex,
                 total: _items.length,
+                isLiked: _likedIds.contains(currentItem.id),
+                onLikeTap: () => _toggleLike(currentItem.id),
+                onMoreTap: () => _showOptions(currentItem),
               ),
             ),
           ),
 
-          // Bottom overlay
           Positioned(
             bottom: 0,
             left: 0,
@@ -92,7 +113,7 @@ class _ViewerPageState extends State<ViewerPage> {
             child: AnimatedOpacity(
               opacity: _overlaysVisible ? 1.0 : 0.0,
               duration: const Duration(milliseconds: 220),
-              child: _BottomBar(item: _items[_currentIndex]),
+              child: _BottomBar(item: currentItem),
             ),
           ),
         ],
@@ -100,6 +121,8 @@ class _ViewerPageState extends State<ViewerPage> {
     );
   }
 }
+
+// ── Photo viewer ─────────────────────────────────────────────────────────────
 
 class _PhotoViewer extends StatefulWidget {
   final MediaItem item;
@@ -142,14 +165,16 @@ class _PhotoViewerState extends State<_PhotoViewer> {
         child: SizedBox(
           width: 24,
           height: 24,
-          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white38),
+          child: CircularProgressIndicator(
+              strokeWidth: 2, color: Colors.white38),
         ),
       );
     }
 
     if (_bytes == null) {
       return const Center(
-        child: Icon(Icons.broken_image_rounded, color: Colors.white30, size: 48),
+        child: Icon(Icons.broken_image_rounded,
+            color: Colors.white30, size: 48),
       );
     }
 
@@ -179,11 +204,22 @@ class _PhotoViewerState extends State<_PhotoViewer> {
   }
 }
 
+// ── Top bar ──────────────────────────────────────────────────────────────────
+
 class _TopBar extends StatelessWidget {
   final int currentIndex;
   final int total;
+  final bool isLiked;
+  final VoidCallback onLikeTap;
+  final VoidCallback onMoreTap;
 
-  const _TopBar({required this.currentIndex, required this.total});
+  const _TopBar({
+    required this.currentIndex,
+    required this.total,
+    required this.isLiked,
+    required this.onLikeTap,
+    required this.onMoreTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -213,14 +249,53 @@ class _TopBar extends StatelessWidget {
               ),
             ),
           ),
-          _OverlayBtn(icon: Icons.favorite_border_rounded, onTap: () {}),
+          // Like button with animated icon swap
+          GestureDetector(
+            onTap: onLikeTap,
+            behavior: HitTestBehavior.opaque,
+            child: SizedBox(
+              width: 40,
+              height: 40,
+              child: Center(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  transitionBuilder: (child, animation) => ScaleTransition(
+                    scale: Tween<double>(begin: 0.6, end: 1.0)
+                        .animate(CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.elasticOut,
+                    )),
+                    child: child,
+                  ),
+                  child: Icon(
+                    isLiked
+                        ? Icons.favorite_rounded
+                        : Icons.favorite_border_rounded,
+                    key: ValueKey(isLiked),
+                    color: isLiked ? AppColors.coral : Colors.white,
+                    size: 22,
+                  ),
+                ),
+              ),
+            ),
+          ),
           const SizedBox(width: 4),
-          _OverlayBtn(icon: Icons.more_vert_rounded, onTap: () {}),
+          GestureDetector(
+            onTap: onMoreTap,
+            behavior: HitTestBehavior.opaque,
+            child: const SizedBox(
+              width: 40,
+              height: 40,
+              child: Icon(Icons.more_vert_rounded, color: Colors.white, size: 22),
+            ),
+          ),
         ],
       ),
     );
   }
 }
+
+// ── Bottom bar ───────────────────────────────────────────────────────────────
 
 class _BottomBar extends StatelessWidget {
   final MediaItem item;
@@ -250,7 +325,8 @@ class _BottomBar extends StatelessWidget {
               const SizedBox(width: 6),
               Text(
                 _formatDate(item.createDate),
-                style: AppTypography.dmSans(fontSize: 12, color: Colors.white60),
+                style: AppTypography.dmSans(
+                    fontSize: 12, color: Colors.white60),
               ),
             ],
           ),
@@ -308,22 +384,339 @@ class _BottomBar extends StatelessWidget {
   }
 }
 
-class _OverlayBtn extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
+// ── Viewer options sheet ──────────────────────────────────────────────────────
 
-  const _OverlayBtn({required this.icon, required this.onTap});
+class _ViewerOptionsSheet extends StatelessWidget {
+  final MediaItem item;
+  const _ViewerOptionsSheet({required this.item});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: 40,
-        height: 40,
-        child: Icon(icon, color: Colors.white, size: 22),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? AppColors.darkSurface : Colors.white;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
       ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle
+          const SizedBox(height: 10),
+          Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.darkOutline : AppColors.outlineVariant,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Info card
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+            child: _InfoRow(item: item, isDark: isDark),
+          ),
+
+          const SizedBox(height: 8),
+          _Divider(isDark: isDark),
+
+          _SheetOption(
+            icon: Icons.info_outline_rounded,
+            label: 'Details',
+            isDark: isDark,
+            onTap: () {
+              Navigator.pop(context);
+              _showDetails(context, item);
+            },
+          ),
+          _SheetOption(
+            icon: Icons.share_rounded,
+            label: 'Share original',
+            isDark: isDark,
+            onTap: () => Navigator.pop(context),
+          ),
+          _SheetOption(
+            icon: Icons.copy_rounded,
+            label: 'Copy to album',
+            isDark: isDark,
+            onTap: () => Navigator.pop(context),
+          ),
+
+          _Divider(isDark: isDark),
+
+          _SheetOption(
+            icon: Icons.delete_outline_rounded,
+            label: 'Delete',
+            isDark: isDark,
+            isDestructive: true,
+            onTap: () {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Delete coming soon'),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
+          ),
+
+          SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
+        ],
+      ),
+    );
+  }
+
+  void _showDetails(BuildContext context, MediaItem item) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.darkSurface : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? AppColors.darkOutline
+                      : AppColors.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Text(
+              'Details',
+              style: AppTypography.outfit(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 20),
+            _DetailRow(
+              icon: item.isVideo
+                  ? Icons.videocam_rounded
+                  : Icons.photo_rounded,
+              label: 'Type',
+              value: item.isVideo ? 'Video' : 'Photo',
+              isDark: isDark,
+            ),
+            _DetailRow(
+              icon: Icons.calendar_today_rounded,
+              label: 'Date',
+              value: _formatDate(item.createDate),
+              isDark: isDark,
+            ),
+            if (item.width > 0 && item.height > 0)
+              _DetailRow(
+                icon: Icons.aspect_ratio_rounded,
+                label: 'Dimensions',
+                value: '${item.width} x ${item.height}',
+                isDark: isDark,
+              ),
+            if (item.isVideo && item.duration > 0)
+              _DetailRow(
+                icon: Icons.timer_outlined,
+                label: 'Duration',
+                value: _formatDuration(item.duration),
+                isDark: isDark,
+              ),
+            SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatDate(DateTime dt) {
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
+    ];
+    return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
+  }
+
+  String _formatDuration(int seconds) {
+    final m = seconds ~/ 60;
+    final s = seconds % 60;
+    return '$m:${s.toString().padLeft(2, '0')}';
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  final MediaItem item;
+  final bool isDark;
+  const _InfoRow({required this.item, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.darkSurfaceVariant : AppColors.surfaceVariant,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            item.isVideo ? Icons.videocam_rounded : Icons.photo_rounded,
+            color: AppColors.primary,
+            size: 22,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              item.isVideo ? 'Video' : 'Photo',
+              style: AppTypography.dmSans(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              _shortDate(item.createDate),
+              style: AppTypography.dmSans(
+                fontSize: 12,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  String _shortDate(DateTime dt) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final bool isDark;
+
+  const _DetailRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        children: [
+          Icon(icon,
+              size: 16,
+              color: Theme.of(context).colorScheme.onSurfaceVariant),
+          const SizedBox(width: 10),
+          Text(
+            label,
+            style: AppTypography.dmSans(
+              fontSize: 13,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            value,
+            style: AppTypography.dmSans(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SheetOption extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool isDark;
+  final bool isDestructive;
+  final VoidCallback onTap;
+
+  const _SheetOption({
+    required this.icon,
+    required this.label,
+    required this.isDark,
+    required this.onTap,
+    this.isDestructive = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isDestructive
+        ? AppColors.error
+        : Theme.of(context).colorScheme.onSurface;
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md, vertical: 14),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: color),
+            const SizedBox(width: 14),
+            Text(
+              label,
+              style: AppTypography.dmSans(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Divider extends StatelessWidget {
+  final bool isDark;
+  const _Divider({required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    return Divider(
+      height: 1,
+      thickness: 0.5,
+      color: isDark ? AppColors.darkOutline : AppColors.outlineVariant,
+      indent: AppSpacing.md,
+      endIndent: AppSpacing.md,
     );
   }
 }
