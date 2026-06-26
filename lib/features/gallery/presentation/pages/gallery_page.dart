@@ -46,6 +46,28 @@ class _GalleryViewState extends State<_GalleryView> {
   final Set<String> _selectedIds = {};
   final _shareButtonKey = GlobalKey();
 
+  // Pinch-to-zoom grid
+  int _pinchStartColumns = 3;
+  bool _isPinching = false;
+
+  void _onScaleStart(ScaleStartDetails details) {
+    if (details.pointerCount < 2) return;
+    _pinchStartColumns = sl<GridColumnsNotifier>().value;
+    _isPinching = true;
+  }
+
+  void _onScaleUpdate(ScaleUpdateDetails details) {
+    if (!_isPinching || details.pointerCount < 2) return;
+    // Pinch in (scale < 1) = more columns; pinch out (scale > 1) = fewer
+    final next = (_pinchStartColumns / details.scale).round().clamp(2, 5);
+    if (next != sl<GridColumnsNotifier>().value) {
+      HapticFeedback.selectionClick();
+      sl<GridColumnsNotifier>().setColumns(next);
+    }
+  }
+
+  void _onScaleEnd(ScaleEndDetails details) => _isPinching = false;
+
   bool get _isSelecting => _selectedIds.isNotEmpty;
 
   @override
@@ -278,8 +300,13 @@ class _GalleryViewState extends State<_GalleryView> {
               final sorted = _sorted(state.items);
               return Stack(
                 children: [
-                  CustomScrollView(
-                    controller: _scrollController,
+                  GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onScaleStart: _onScaleStart,
+                    onScaleUpdate: _onScaleUpdate,
+                    onScaleEnd: _onScaleEnd,
+                    child: CustomScrollView(
+                      controller: _scrollController,
                     slivers: [
                       _AppBar(
                         isDark: isDark,
@@ -311,7 +338,8 @@ class _GalleryViewState extends State<_GalleryView> {
                               child: SizedBox(height: 80)),
                       ],
                     ],
-                  ),
+                  ),        // CustomScrollView
+                  ),        // GestureDetector
 
                   if (_isSelecting)
                     Positioned(
