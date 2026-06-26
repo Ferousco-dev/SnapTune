@@ -11,8 +11,7 @@ import '../../../../core/router/routes.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../viewer/presentation/pages/viewer_page.dart';
 import '../../../optimize/presentation/pages/optimize_page.dart'
-    show ProcessingArgs;
-import '../../../optimize/domain/entities/platform_preset.dart';
+    show OptimizeArgs;
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../domain/entities/media_item.dart';
@@ -170,11 +169,8 @@ class _GalleryViewState extends State<_GalleryView> {
     }
 
     context.push(
-      Routes.processing,
-      extra: ProcessingArgs(
-        item: items.first,
-        preset: PlatformPreset.all.first,
-      ),
+      Routes.optimize,
+      extra: OptimizeArgs(item: items.first),
     );
   }
 
