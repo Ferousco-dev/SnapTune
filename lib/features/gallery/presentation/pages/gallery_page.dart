@@ -37,6 +37,9 @@ class _GalleryView extends StatefulWidget {
 class _GalleryViewState extends State<_GalleryView> {
   final _scrollController = ScrollController();
   bool _sortNewest = true;
+  final Set<String> _selectedIds = {};
+
+  bool get _isSelecting => _selectedIds.isNotEmpty;
 
   @override
   void initState() {
@@ -63,6 +66,29 @@ class _GalleryViewState extends State<_GalleryView> {
         ? b.createDate.compareTo(a.createDate)
         : a.createDate.compareTo(b.createDate));
     return copy;
+  }
+
+  void _enterSelectMode(String id) {
+    HapticFeedback.mediumImpact();
+    setState(() => _selectedIds.add(id));
+  }
+
+  void _toggleSelect(String id) {
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+      } else {
+        _selectedIds.add(id);
+        HapticFeedback.lightImpact();
+      }
+    });
+  }
+
+  void _clearSelection() => setState(() => _selectedIds.clear());
+
+  void _selectAll(List<MediaItem> items) {
+    HapticFeedback.lightImpact();
+    setState(() => _selectedIds.addAll(items.map((i) => i.id)));
   }
 
   void _showMoreMenu(BuildContext ctx, List<MediaItem> items) {
@@ -113,28 +139,81 @@ class _GalleryViewState extends State<_GalleryView> {
       body: BlocBuilder<GalleryBloc, GalleryState>(
         builder: (context, state) {
           final sorted = _sorted(state.items);
-          return CustomScrollView(
-            controller: _scrollController,
-            slivers: [
-              _AppBar(
-                isDark: isDark,
-                onSearch: () => _openSearch(state.items),
-                onMore: () => _showMoreMenu(context, state.items),
-                sortNewest: _sortNewest,
+          return Stack(
+            children: [
+              CustomScrollView(
+                controller: _scrollController,
+                slivers: [
+                  _AppBar(
+                    isDark: isDark,
+                    onSearch: () => _openSearch(state.items),
+                    onMore: () => _showMoreMenu(context, state.items),
+                    sortNewest: _sortNewest,
+                    isSelecting: _isSelecting,
+                    selectedCount: _selectedIds.length,
+                    onCancelSelect: _clearSelection,
+                    onSelectAll: () => _selectAll(sorted),
+                  ),
+                  if (!_isSelecting)
+                    _FilterBar(activeFilter: state.activeFilter),
+                  if (state.status == GalleryStatus.permissionDenied)
+                    const SliverFillRemaining(child: _PermissionDeniedView())
+                  else if (state.status == GalleryStatus.loading &&
+                      state.items.isEmpty)
+                    const SliverFillRemaining(child: _LoadingView())
+                  else if (state.isEmpty)
+                    const SliverFillRemaining(child: _EmptyView())
+                  else ...[
+                    _MediaGrid(
+                      items: sorted,
+                      selectedIds: _selectedIds,
+                      isSelecting: _isSelecting,
+                      onTap: (item) {
+                        if (_isSelecting) {
+                          _toggleSelect(item.id);
+                        } else {
+                          context.push(
+                            Routes.viewer,
+                            extra: ViewerArgs(
+                              items: sorted,
+                              startIndex: sorted.indexOf(item),
+                            ),
+                          );
+                        }
+                      },
+                      onLongPress: (item) {
+                        if (!_isSelecting) _enterSelectMode(item.id);
+                      },
+                    ),
+                    if (state.hasMore && state.isLoaded)
+                      const SliverToBoxAdapter(
+                          child: _LoadMoreIndicator()),
+                    // Bottom padding so selection bar doesn't hide last row
+                    if (_isSelecting)
+                      const SliverToBoxAdapter(
+                          child: SizedBox(height: 80)),
+                  ],
+                ],
               ),
-              _FilterBar(activeFilter: state.activeFilter),
-              if (state.status == GalleryStatus.permissionDenied)
-                const SliverFillRemaining(child: _PermissionDeniedView())
-              else if (state.status == GalleryStatus.loading &&
-                  state.items.isEmpty)
-                const SliverFillRemaining(child: _LoadingView())
-              else if (state.isEmpty)
-                const SliverFillRemaining(child: _EmptyView())
-              else ...[
-                _MediaGrid(items: sorted, rawItems: state.items),
-                if (state.hasMore && state.isLoaded)
-                  const SliverToBoxAdapter(child: _LoadMoreIndicator()),
-              ],
+
+              // Selection action bar
+              if (_isSelecting)
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: _SelectionBar(
+                    count: _selectedIds.length,
+                    onShare: () {},
+                    onOptimize: () {},
+                    onDelete: () => ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Delete coming soon'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           );
         },
@@ -150,12 +229,20 @@ class _AppBar extends StatelessWidget {
   final bool sortNewest;
   final VoidCallback onSearch;
   final VoidCallback onMore;
+  final bool isSelecting;
+  final int selectedCount;
+  final VoidCallback onCancelSelect;
+  final VoidCallback onSelectAll;
 
   const _AppBar({
     required this.isDark,
     required this.onSearch,
     required this.onMore,
     required this.sortNewest,
+    required this.isSelecting,
+    required this.selectedCount,
+    required this.onCancelSelect,
+    required this.onSelectAll,
   });
 
   @override
@@ -166,32 +253,64 @@ class _AppBar extends StatelessWidget {
       elevation: 0,
       scrolledUnderElevation: 0,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      title: Text(
-        'Gallery',
-        style: AppTypography.outfit(
-          fontSize: 26,
-          fontWeight: FontWeight.w700,
-          color: Theme.of(context).colorScheme.onSurface,
-          letterSpacing: -0.3,
-        ),
+      leading: isSelecting
+          ? IconButton(
+              icon: const Icon(Icons.close_rounded),
+              color: Theme.of(context).colorScheme.onSurface,
+              onPressed: onCancelSelect,
+            )
+          : null,
+      automaticallyImplyLeading: false,
+      title: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 200),
+        child: isSelecting
+            ? Text(
+                '$selectedCount selected',
+                key: const ValueKey('select'),
+                style: AppTypography.outfit(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              )
+            : Text(
+                'Gallery',
+                key: const ValueKey('gallery'),
+                style: AppTypography.outfit(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w700,
+                  color: Theme.of(context).colorScheme.onSurface,
+                  letterSpacing: -0.3,
+                ),
+              ),
       ),
-      actions: [
-        IconButton(
-          icon: Icon(
-            Icons.search_rounded,
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
-          onPressed: onSearch,
-        ),
-        IconButton(
-          icon: Icon(
-            Icons.more_vert_rounded,
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
-          onPressed: onMore,
-        ),
-        const SizedBox(width: 4),
-      ],
+      actions: isSelecting
+          ? [
+              TextButton(
+                onPressed: onSelectAll,
+                child: Text(
+                  'Select All',
+                  style: AppTypography.dmSans(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+            ]
+          : [
+              IconButton(
+                icon: Icon(Icons.search_rounded,
+                    color: Theme.of(context).colorScheme.onSurface),
+                onPressed: onSearch,
+              ),
+              IconButton(
+                icon: Icon(Icons.more_vert_rounded,
+                    color: Theme.of(context).colorScheme.onSurface),
+                onPressed: onMore,
+              ),
+              const SizedBox(width: 4),
+            ],
     );
   }
 }
@@ -619,9 +738,18 @@ class _FilterBar extends StatelessWidget {
 
 class _MediaGrid extends StatelessWidget {
   final List<MediaItem> items;
-  final List<MediaItem> rawItems;
+  final Set<String> selectedIds;
+  final bool isSelecting;
+  final void Function(MediaItem) onTap;
+  final void Function(MediaItem) onLongPress;
 
-  const _MediaGrid({required this.items, required this.rawItems});
+  const _MediaGrid({
+    required this.items,
+    required this.selectedIds,
+    required this.isSelecting,
+    required this.onTap,
+    required this.onLongPress,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -634,7 +762,10 @@ class _MediaGrid extends StatelessWidget {
           return _MonthSection(
             label: entry.key,
             sectionItems: entry.value,
-            allItems: items,
+            selectedIds: selectedIds,
+            isSelecting: isSelecting,
+            onTap: onTap,
+            onLongPress: onLongPress,
           );
         },
         childCount: grouped.length,
@@ -655,12 +786,18 @@ class _MediaGrid extends StatelessWidget {
 class _MonthSection extends StatelessWidget {
   final String label;
   final List<MediaItem> sectionItems;
-  final List<MediaItem> allItems;
+  final Set<String> selectedIds;
+  final bool isSelecting;
+  final void Function(MediaItem) onTap;
+  final void Function(MediaItem) onLongPress;
 
   const _MonthSection({
     required this.label,
     required this.sectionItems,
-    required this.allItems,
+    required this.selectedIds,
+    required this.isSelecting,
+    required this.onTap,
+    required this.onLongPress,
   });
 
   @override
@@ -692,17 +829,124 @@ class _MonthSection extends StatelessWidget {
           itemCount: sectionItems.length,
           itemBuilder: (_, i) {
             final item = sectionItems[i];
-            final globalIndex = allItems.indexOf(item);
             return MediaThumbnail(
               item: item,
-              onTap: () => context.push(
-                Routes.viewer,
-                extra: ViewerArgs(items: allItems, startIndex: globalIndex),
-              ),
+              isSelecting: isSelecting,
+              isSelected: selectedIds.contains(item.id),
+              onTap: () => onTap(item),
+              onLongPress: () => onLongPress(item),
             );
           },
         ),
       ],
+    );
+  }
+}
+
+// ── Selection bar ─────────────────────────────────────────────────────────────
+
+class _SelectionBar extends StatelessWidget {
+  final int count;
+  final VoidCallback onShare;
+  final VoidCallback onOptimize;
+  final VoidCallback onDelete;
+
+  const _SelectionBar({
+    required this.count,
+    required this.onShare,
+    required this.onOptimize,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurface : Colors.white,
+        border: Border(
+          top: BorderSide(
+            color: isDark ? AppColors.darkOutline : AppColors.outlineVariant,
+            width: 0.5,
+          ),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(isDark ? 60 : 20),
+            blurRadius: 16,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).padding.bottom + 4,
+        top: 8,
+        left: AppSpacing.md,
+        right: AppSpacing.md,
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _SelectionAction(
+            icon: Icons.share_rounded,
+            label: 'Share',
+            onTap: onShare,
+          ),
+          _SelectionAction(
+            icon: Icons.auto_fix_high_rounded,
+            label: 'Optimize',
+            color: AppColors.primary,
+            onTap: onOptimize,
+          ),
+          _SelectionAction(
+            icon: Icons.delete_outline_rounded,
+            label: 'Delete',
+            color: AppColors.error,
+            onTap: onDelete,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SelectionAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color? color;
+  final VoidCallback onTap;
+
+  const _SelectionAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = color ?? Theme.of(context).colorScheme.onSurface;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: c, size: 22),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: AppTypography.dmSans(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: c,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
