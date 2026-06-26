@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../../core/di/service_locator.dart';
+import '../../../../core/services/grid_columns_notifier.dart';
 import '../../../../core/router/routes.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../viewer/presentation/pages/viewer_page.dart';
@@ -202,81 +203,86 @@ class _GalleryViewState extends State<_GalleryView> {
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: BlocBuilder<GalleryBloc, GalleryState>(
-        builder: (context, state) {
-          final sorted = _sorted(state.items);
-          return Stack(
-            children: [
-              CustomScrollView(
-                controller: _scrollController,
-                slivers: [
-                  _AppBar(
-                    isDark: isDark,
-                    onSearch: () => _openSearch(state.items),
-                    onMore: () => _showMoreMenu(context, state.items),
-                    sortNewest: _sortNewest,
-                    isSelecting: _isSelecting,
-                    selectedCount: _selectedIds.length,
-                    onCancelSelect: _clearSelection,
-                    onSelectAll: () => _selectAll(sorted),
+      body: ValueListenableBuilder<int>(
+        valueListenable: sl<GridColumnsNotifier>(),
+        builder: (context, crossAxisCount, _) {
+          return BlocBuilder<GalleryBloc, GalleryState>(
+            builder: (context, state) {
+              final sorted = _sorted(state.items);
+              return Stack(
+                children: [
+                  CustomScrollView(
+                    controller: _scrollController,
+                    slivers: [
+                      _AppBar(
+                        isDark: isDark,
+                        onSearch: () => _openSearch(state.items),
+                        onMore: () => _showMoreMenu(context, state.items),
+                        sortNewest: _sortNewest,
+                        isSelecting: _isSelecting,
+                        selectedCount: _selectedIds.length,
+                        onCancelSelect: _clearSelection,
+                        onSelectAll: () => _selectAll(sorted),
+                      ),
+                      if (!_isSelecting)
+                        _FilterBar(activeFilter: state.activeFilter),
+                      if (state.status == GalleryStatus.permissionDenied)
+                        const SliverFillRemaining(
+                            child: _PermissionDeniedView())
+                      else if (state.status == GalleryStatus.loading &&
+                          state.items.isEmpty)
+                        const SliverFillRemaining(child: _LoadingView())
+                      else if (state.isEmpty)
+                        const SliverFillRemaining(child: _EmptyView())
+                      else ...[
+                        _MediaGrid(
+                          items: sorted,
+                          crossAxisCount: crossAxisCount,
+                          selectedIds: _selectedIds,
+                          isSelecting: _isSelecting,
+                          onTap: (item) {
+                            if (_isSelecting) {
+                              _toggleSelect(item.id);
+                            } else {
+                              context.push(
+                                Routes.viewer,
+                                extra: ViewerArgs(
+                                  items: sorted,
+                                  startIndex: sorted.indexOf(item),
+                                ),
+                              );
+                            }
+                          },
+                          onLongPress: (item) {
+                            if (!_isSelecting) _enterSelectMode(item.id);
+                          },
+                        ),
+                        if (state.hasMore && state.isLoaded)
+                          const SliverToBoxAdapter(
+                              child: _LoadMoreIndicator()),
+                        if (_isSelecting)
+                          const SliverToBoxAdapter(
+                              child: SizedBox(height: 80)),
+                      ],
+                    ],
                   ),
-                  if (!_isSelecting)
-                    _FilterBar(activeFilter: state.activeFilter),
-                  if (state.status == GalleryStatus.permissionDenied)
-                    const SliverFillRemaining(child: _PermissionDeniedView())
-                  else if (state.status == GalleryStatus.loading &&
-                      state.items.isEmpty)
-                    const SliverFillRemaining(child: _LoadingView())
-                  else if (state.isEmpty)
-                    const SliverFillRemaining(child: _EmptyView())
-                  else ...[
-                    _MediaGrid(
-                      items: sorted,
-                      selectedIds: _selectedIds,
-                      isSelecting: _isSelecting,
-                      onTap: (item) {
-                        if (_isSelecting) {
-                          _toggleSelect(item.id);
-                        } else {
-                          context.push(
-                            Routes.viewer,
-                            extra: ViewerArgs(
-                              items: sorted,
-                              startIndex: sorted.indexOf(item),
-                            ),
-                          );
-                        }
-                      },
-                      onLongPress: (item) {
-                        if (!_isSelecting) _enterSelectMode(item.id);
-                      },
-                    ),
-                    if (state.hasMore && state.isLoaded)
-                      const SliverToBoxAdapter(
-                          child: _LoadMoreIndicator()),
-                    // Bottom padding so selection bar doesn't hide last row
-                    if (_isSelecting)
-                      const SliverToBoxAdapter(
-                          child: SizedBox(height: 80)),
-                  ],
-                ],
-              ),
 
-              // Selection action bar
-              if (_isSelecting)
-                Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  child: _SelectionBar(
-                    count: _selectedIds.length,
-                    shareButtonKey: _shareButtonKey,
-                    onShare: () => _shareSelected(sorted),
-                    onOptimize: () => _optimizeSelected(sorted),
-                    onDelete: _confirmDelete,
-                  ),
-                ),
-            ],
+                  if (_isSelecting)
+                    Positioned(
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      child: _SelectionBar(
+                        count: _selectedIds.length,
+                        shareButtonKey: _shareButtonKey,
+                        onShare: () => _shareSelected(sorted),
+                        onOptimize: () => _optimizeSelected(sorted),
+                        onDelete: _confirmDelete,
+                      ),
+                    ),
+                ],
+              );
+            },
           );
         },
       ),
@@ -717,8 +723,8 @@ class _ResultGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return GridView.builder(
       padding: const EdgeInsets.all(2),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: sl<GridColumnsNotifier>().value,
         mainAxisSpacing: 2,
         crossAxisSpacing: 2,
       ),
@@ -800,6 +806,7 @@ class _FilterBar extends StatelessWidget {
 
 class _MediaGrid extends StatelessWidget {
   final List<MediaItem> items;
+  final int crossAxisCount;
   final Set<String> selectedIds;
   final bool isSelecting;
   final void Function(MediaItem) onTap;
@@ -807,6 +814,7 @@ class _MediaGrid extends StatelessWidget {
 
   const _MediaGrid({
     required this.items,
+    required this.crossAxisCount,
     required this.selectedIds,
     required this.isSelecting,
     required this.onTap,
@@ -824,6 +832,7 @@ class _MediaGrid extends StatelessWidget {
           return _MonthSection(
             label: entry.key,
             sectionItems: entry.value,
+            crossAxisCount: crossAxisCount,
             selectedIds: selectedIds,
             isSelecting: isSelecting,
             onTap: onTap,
@@ -848,6 +857,7 @@ class _MediaGrid extends StatelessWidget {
 class _MonthSection extends StatelessWidget {
   final String label;
   final List<MediaItem> sectionItems;
+  final int crossAxisCount;
   final Set<String> selectedIds;
   final bool isSelecting;
   final void Function(MediaItem) onTap;
@@ -856,6 +866,7 @@ class _MonthSection extends StatelessWidget {
   const _MonthSection({
     required this.label,
     required this.sectionItems,
+    required this.crossAxisCount,
     required this.selectedIds,
     required this.isSelecting,
     required this.onTap,
@@ -883,8 +894,8 @@ class _MonthSection extends StatelessWidget {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 2),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
             mainAxisSpacing: 2,
             crossAxisSpacing: 2,
           ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/di/service_locator.dart';
+import '../../../../core/services/grid_columns_notifier.dart';
 import '../../../../core/services/theme_notifier.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
@@ -20,8 +21,11 @@ class SettingsPage extends StatelessWidget {
       ThemeMode.dark => 'Dark',
       _ => 'Follow system',
     };
+    final gridColumns = sl<GridColumnsNotifier>().value;
 
-    return Scaffold(
+    return ValueListenableBuilder<int>(
+      valueListenable: sl<GridColumnsNotifier>(),
+      builder: (context, cols, _) => Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: theme.scaffoldBackgroundColor,
@@ -70,7 +74,7 @@ class SettingsPage extends StatelessWidget {
                 icon: Icons.grid_view_rounded,
                 iconColor: AppColors.primary,
                 title: 'Grid columns',
-                subtitle: '3 columns',
+                subtitle: '$gridColumns columns',
                 trailing: const Icon(
                   Icons.chevron_right_rounded,
                   size: 20,
@@ -199,6 +203,7 @@ class SettingsPage extends StatelessWidget {
           ),
         ],
       ),
+    ),
     );
   }
 
@@ -512,6 +517,13 @@ class _GridSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final current = sl<GridColumnsNotifier>().value;
+
+    void pick(int count) {
+      sl<GridColumnsNotifier>().setColumns(count);
+      Navigator.pop(context);
+    }
+
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
@@ -550,22 +562,22 @@ class _GridSheet extends StatelessWidget {
               isDark: isDark,
               icon: Icons.grid_view_rounded,
               label: '2 columns',
-              selected: false,
-              onTap: () => Navigator.pop(context),
+              selected: current == 2,
+              onTap: () => pick(2),
             ),
             _SheetOption(
               isDark: isDark,
               icon: Icons.apps_rounded,
               label: '3 columns',
-              selected: true,
-              onTap: () => Navigator.pop(context),
+              selected: current == 3,
+              onTap: () => pick(3),
             ),
             _SheetOption(
               isDark: isDark,
               icon: Icons.view_comfy_rounded,
               label: '4 columns',
-              selected: false,
-              onTap: () => Navigator.pop(context),
+              selected: current == 4,
+              onTap: () => pick(4),
             ),
           ],
         ),
