@@ -18,10 +18,12 @@ class _SplashPageState extends State<SplashPage>
     with TickerProviderStateMixin {
   late final AnimationController _entryController;
   late final AnimationController _orbitController;
+  late final AnimationController _exitController;
 
   late final Animation<double> _scaleAnim;
   late final Animation<double> _fadeAnim;
   late final Animation<double> _taglineFadeAnim;
+  late final Animation<double> _exitAnim;
 
   @override
   void initState() {
@@ -36,6 +38,11 @@ class _SplashPageState extends State<SplashPage>
       vsync: this,
       duration: const Duration(milliseconds: 3600),
     )..repeat();
+
+    _exitController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+    );
 
     _scaleAnim = Tween<double>(begin: 0.72, end: 1.0).animate(
       CurvedAnimation(
@@ -58,12 +65,21 @@ class _SplashPageState extends State<SplashPage>
       ),
     );
 
+    // Fades content from 1 to 0 during exit
+    _exitAnim = Tween<double>(begin: 1.0, end: 0.0).animate(
+      CurvedAnimation(parent: _exitController, curve: Curves.easeIn),
+    );
+
     _entryController.forward();
     _navigateAfter();
   }
 
   Future<void> _navigateAfter() async {
-    await Future.delayed(const Duration(milliseconds: 2400));
+    await Future.delayed(const Duration(milliseconds: 1900));
+    if (!mounted) return;
+    // Fade out splash content, then navigate. The gradient background stays
+    // visible so the gallery's own fade-in has a rich backdrop to emerge from.
+    await _exitController.forward();
     if (!mounted) return;
     final done = sl<PrefsService>().isOnboardingDone;
     context.go(done ? Routes.gallery : Routes.onboarding);
@@ -73,6 +89,7 @@ class _SplashPageState extends State<SplashPage>
   void dispose() {
     _entryController.dispose();
     _orbitController.dispose();
+    _exitController.dispose();
     super.dispose();
   }
 
@@ -83,9 +100,13 @@ class _SplashPageState extends State<SplashPage>
         decoration: const BoxDecoration(
           gradient: AppColors.splashGradient,
         ),
-        child: Stack(
-          children: [
-            // Ambient glow circles
+        // Gradient stays at full opacity; only the content fades out on exit
+        child: AnimatedBuilder(
+          animation: _exitController,
+          builder: (_, child) => Opacity(opacity: _exitAnim.value, child: child),
+          child: Stack(
+            children: [
+              // Ambient glow circles
             Positioned(
               top: -80,
               right: -60,
@@ -192,8 +213,9 @@ class _SplashPageState extends State<SplashPage>
               ),
             ),
           ],
-        ),
-      ),
+        ),        // Stack
+        ),        // AnimatedBuilder
+      ),          // Container
     );
   }
 }
