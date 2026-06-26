@@ -197,6 +197,73 @@ class _GalleryViewState extends State<_GalleryView> {
     });
   }
 
+  Map<String, List<MediaItem>> _groupByMonth(List<MediaItem> items) {
+    final result = <String, List<MediaItem>>{};
+    for (final item in items) {
+      final key = DateFormat('MMMM yyyy').format(item.createDate);
+      result.putIfAbsent(key, () => []).add(item);
+    }
+    return result;
+  }
+
+  List<Widget> _buildSectionSlivers(
+      List<MediaItem> sorted, int crossAxisCount) {
+    final grouped = _groupByMonth(sorted);
+    final slivers = <Widget>[];
+    for (final entry in grouped.entries) {
+      slivers.add(SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.md, AppSpacing.md, AppSpacing.md, AppSpacing.sm,
+          ),
+          child: Text(
+            entry.key,
+            style: AppTypography.dmSans(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ));
+      slivers.add(SliverGrid(
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: crossAxisCount,
+          mainAxisSpacing: 2,
+          crossAxisSpacing: 2,
+        ),
+        delegate: SliverChildBuilderDelegate(
+          (_, i) {
+            final item = entry.value[i];
+            return MediaThumbnail(
+              item: item,
+              isSelecting: _isSelecting,
+              isSelected: _selectedIds.contains(item.id),
+              onTap: () {
+                if (_isSelecting) {
+                  _toggleSelect(item.id);
+                } else {
+                  context.push(
+                    Routes.viewer,
+                    extra: ViewerArgs(
+                      items: sorted,
+                      startIndex: sorted.indexOf(item),
+                    ),
+                  );
+                }
+              },
+              onLongPress: () {
+                if (!_isSelecting) _enterSelectMode(item.id);
+              },
+            );
+          },
+          childCount: entry.value.length,
+        ),
+      ));
+    }
+    return slivers;
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -235,28 +302,7 @@ class _GalleryViewState extends State<_GalleryView> {
                       else if (state.isEmpty)
                         const SliverFillRemaining(child: _EmptyView())
                       else ...[
-                        _MediaGrid(
-                          items: sorted,
-                          crossAxisCount: crossAxisCount,
-                          selectedIds: _selectedIds,
-                          isSelecting: _isSelecting,
-                          onTap: (item) {
-                            if (_isSelecting) {
-                              _toggleSelect(item.id);
-                            } else {
-                              context.push(
-                                Routes.viewer,
-                                extra: ViewerArgs(
-                                  items: sorted,
-                                  startIndex: sorted.indexOf(item),
-                                ),
-                              );
-                            }
-                          },
-                          onLongPress: (item) {
-                            if (!_isSelecting) _enterSelectMode(item.id);
-                          },
-                        ),
+                        ..._buildSectionSlivers(sorted, crossAxisCount),
                         if (state.hasMore && state.isLoaded)
                           const SliverToBoxAdapter(
                               child: _LoadMoreIndicator()),
@@ -472,12 +518,6 @@ class _GalleryOptionsSheet extends StatelessWidget {
             label: 'Refresh',
             isDark: isDark,
             onTap: onRefresh,
-          ),
-          _OptionTile(
-            icon: Icons.check_box_outline_blank_rounded,
-            label: 'Select items',
-            isDark: isDark,
-            onTap: () => Navigator.pop(context),
           ),
 
           SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
@@ -804,117 +844,6 @@ class _FilterBar extends StatelessWidget {
 
 // ── Media grid ────────────────────────────────────────────────────────────────
 
-class _MediaGrid extends StatelessWidget {
-  final List<MediaItem> items;
-  final int crossAxisCount;
-  final Set<String> selectedIds;
-  final bool isSelecting;
-  final void Function(MediaItem) onTap;
-  final void Function(MediaItem) onLongPress;
-
-  const _MediaGrid({
-    required this.items,
-    required this.crossAxisCount,
-    required this.selectedIds,
-    required this.isSelecting,
-    required this.onTap,
-    required this.onLongPress,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final grouped = _groupByMonth(items);
-
-    return SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (context, sectionIndex) {
-          final entry = grouped.entries.elementAt(sectionIndex);
-          return _MonthSection(
-            label: entry.key,
-            sectionItems: entry.value,
-            crossAxisCount: crossAxisCount,
-            selectedIds: selectedIds,
-            isSelecting: isSelecting,
-            onTap: onTap,
-            onLongPress: onLongPress,
-          );
-        },
-        childCount: grouped.length,
-      ),
-    );
-  }
-
-  Map<String, List<MediaItem>> _groupByMonth(List<MediaItem> items) {
-    final result = <String, List<MediaItem>>{};
-    for (final item in items) {
-      final key = DateFormat('MMMM yyyy').format(item.createDate);
-      result.putIfAbsent(key, () => []).add(item);
-    }
-    return result;
-  }
-}
-
-class _MonthSection extends StatelessWidget {
-  final String label;
-  final List<MediaItem> sectionItems;
-  final int crossAxisCount;
-  final Set<String> selectedIds;
-  final bool isSelecting;
-  final void Function(MediaItem) onTap;
-  final void Function(MediaItem) onLongPress;
-
-  const _MonthSection({
-    required this.label,
-    required this.sectionItems,
-    required this.crossAxisCount,
-    required this.selectedIds,
-    required this.isSelecting,
-    required this.onTap,
-    required this.onLongPress,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-              AppSpacing.md, AppSpacing.md, AppSpacing.md, AppSpacing.sm),
-          child: Text(
-            label,
-            style: AppTypography.dmSans(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 2),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            mainAxisSpacing: 2,
-            crossAxisSpacing: 2,
-          ),
-          itemCount: sectionItems.length,
-          itemBuilder: (_, i) {
-            final item = sectionItems[i];
-            return MediaThumbnail(
-              item: item,
-              isSelecting: isSelecting,
-              isSelected: selectedIds.contains(item.id),
-              onTap: () => onTap(item),
-              onLongPress: () => onLongPress(item),
-            );
-          },
-        ),
-      ],
-    );
-  }
-}
 
 // ── Selection bar ─────────────────────────────────────────────────────────────
 
