@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:photo_manager/photo_manager.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../../../core/router/routes.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
@@ -26,6 +28,8 @@ class _ResultPageState extends State<ResultPage>
   late final AnimationController _entryController;
   late final Animation<double> _scaleAnim;
   late final Animation<double> _fadeAnim;
+  bool _sharing = false;
+  bool _saving = false;
 
   @override
   void initState() {
@@ -49,6 +53,46 @@ class _ResultPageState extends State<ResultPage>
   void dispose() {
     _entryController.dispose();
     super.dispose();
+  }
+
+  Future<void> _shareNow() async {
+    final item = widget.args?.item;
+    if (item == null) return;
+    setState(() => _sharing = true);
+    try {
+      final asset = await AssetEntity.fromId(item.id);
+      final file = await asset?.file;
+      if (file == null || !mounted) return;
+      await Share.shareXFiles([XFile(file.path)]);
+    } finally {
+      if (mounted) setState(() => _sharing = false);
+    }
+  }
+
+  Future<void> _saveCopy() async {
+    final item = widget.args?.item;
+    if (item == null) return;
+    setState(() => _saving = true);
+    try {
+      final asset = await AssetEntity.fromId(item.id);
+      if (asset == null || !mounted) return;
+      final bytes = await asset.originBytes;
+      if (bytes == null || !mounted) return;
+      await PhotoManager.editor.saveImage(
+        bytes,
+        filename: 'snaptune_optimized.jpg',
+        title: 'SnapTune',
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Saved to your gallery'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
@@ -168,28 +212,41 @@ class _ResultPageState extends State<ResultPage>
                 children: [
                   // Share Now
                   GestureDetector(
-                    onTap: () {},
-                    child: Container(
+                    onTap: _sharing ? null : _shareNow,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
                       height: 54,
                       decoration: BoxDecoration(
                         gradient: AppColors.brandGradient,
                         borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.primary.withAlpha(70),
-                            blurRadius: 20,
-                            offset: const Offset(0, 6),
-                          ),
-                        ],
+                        boxShadow: _sharing
+                            ? []
+                            : [
+                                BoxShadow(
+                                  color: AppColors.primary.withAlpha(70),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 6),
+                                ),
+                              ],
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.share_rounded,
-                              color: Colors.white, size: 18),
+                          if (_sharing)
+                            const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          else
+                            const Icon(Icons.share_rounded,
+                                color: Colors.white, size: 18),
                           const SizedBox(width: 8),
                           Text(
-                            'Share Now',
+                            _sharing ? 'Preparing...' : 'Share Now',
                             style: AppTypography.dmSans(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
@@ -205,7 +262,7 @@ class _ResultPageState extends State<ResultPage>
 
                   // Save Copy
                   GestureDetector(
-                    onTap: () {},
+                    onTap: _saving ? null : _saveCopy,
                     child: Container(
                       height: 50,
                       decoration: BoxDecoration(
@@ -223,19 +280,30 @@ class _ResultPageState extends State<ResultPage>
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
-                            Icons.save_alt_rounded,
-                            size: 18,
-                            color: Theme.of(context).colorScheme.onSurface,
-                          ),
+                          if (_saving)
+                            SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurface,
+                              ),
+                            )
+                          else
+                            Icon(
+                              Icons.save_alt_rounded,
+                              size: 18,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
                           const SizedBox(width: 8),
                           Text(
-                            'Save Copy',
+                            _saving ? 'Saving...' : 'Save Copy',
                             style: AppTypography.dmSans(
                               fontSize: 15,
                               fontWeight: FontWeight.w500,
-                              color:
-                                  Theme.of(context).colorScheme.onSurface,
+                              color: Theme.of(context).colorScheme.onSurface,
                             ),
                           ),
                         ],
