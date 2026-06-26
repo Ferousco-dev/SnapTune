@@ -8,18 +8,81 @@ import '../../../../core/theme/app_typography.dart';
 class MediaThumbnail extends StatelessWidget {
   final MediaItem item;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+  final bool isSelected;
+  final bool isSelecting;
 
-  const MediaThumbnail({super.key, required this.item, this.onTap});
+  const MediaThumbnail({
+    super.key,
+    required this.item,
+    this.onTap,
+    this.onLongPress,
+    this.isSelected = false,
+    this.isSelecting = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
+      onLongPress: onLongPress,
       child: Stack(
         fit: StackFit.expand,
         children: [
+          // Thumbnail image
           _ThumbnailImage(id: item.id),
+
+          // Video overlay (duration + play icon)
           if (item.isVideo) _VideoOverlay(duration: item.duration),
+
+          // Selection overlay
+          AnimatedOpacity(
+            opacity: isSelected ? 1.0 : 0.0,
+            duration: const Duration(milliseconds: 150),
+            child: Container(
+              color: AppColors.primary.withAlpha(80),
+            ),
+          ),
+
+          // Selection checkmark
+          Positioned(
+            top: 6,
+            right: 6,
+            child: AnimatedScale(
+              scale: isSelected ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.elasticOut,
+              child: Container(
+                width: 22,
+                height: 22,
+                decoration: const BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.check_rounded,
+                  color: Colors.white,
+                  size: 14,
+                ),
+              ),
+            ),
+          ),
+
+          // Empty circle shown when in select mode but this item is not selected
+          if (isSelecting && !isSelected)
+            Positioned(
+              top: 6,
+              right: 6,
+              child: Container(
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.black.withAlpha(60),
+                  border: Border.all(color: Colors.white70, width: 1.5),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -47,7 +110,8 @@ class _ThumbnailImageState extends State<_ThumbnailImage> {
   Future<void> _load() async {
     final asset = await AssetEntity.fromId(widget.id);
     if (asset == null || !mounted) return;
-    final bytes = await asset.thumbnailDataWithSize(const ThumbnailSize(300, 300));
+    final bytes =
+        await asset.thumbnailDataWithSize(const ThumbnailSize(300, 300));
     if (!mounted) return;
     setState(() {
       _bytes = bytes;
@@ -58,24 +122,20 @@ class _ThumbnailImageState extends State<_ThumbnailImage> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final shimmerColor = isDark ? AppColors.darkSurfaceVariant : AppColors.surfaceVariant;
+    final shimmerColor =
+        isDark ? AppColors.darkSurfaceVariant : AppColors.surfaceVariant;
 
-    if (_loading) {
-      return Container(color: shimmerColor);
-    }
+    if (_loading) return Container(color: shimmerColor);
 
     if (_bytes == null) {
       return Container(
         color: shimmerColor,
-        child: const Icon(Icons.broken_image_rounded, color: Colors.white38, size: 20),
+        child: const Icon(Icons.broken_image_rounded,
+            color: Colors.white38, size: 20),
       );
     }
 
-    return Image.memory(
-      _bytes!,
-      fit: BoxFit.cover,
-      gaplessPlayback: true,
-    );
+    return Image.memory(_bytes!, fit: BoxFit.cover, gaplessPlayback: true);
   }
 }
 
@@ -96,8 +156,9 @@ class _VideoOverlay extends StatelessWidget {
       right: 0,
       bottom: 0,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
-        decoration: BoxDecoration(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+        decoration: const BoxDecoration(
           gradient: AppColors.viewerBottomGradient,
         ),
         child: Row(
