@@ -67,9 +67,13 @@ class _PeoplePageState extends State<PeoplePage> {
       for (final asset in assets) {
         final count = await _service.countFaces(asset);
         final item = MediaItemModel.fromAsset(asset);
-        if (count == 1) _solo.add(item);
-        else if (count == 2) _together.add(item);
-        else if (count >= 3) _group.add(item);
+        if (count == 1) {
+          _solo.add(item);
+        } else if (count == 2) {
+          _together.add(item);
+        } else if (count >= 3) {
+          _group.add(item);
+        }
         if (mounted) setState(() => _processed++);
         // Yield so Flutter can repaint between each photo
         await Future.delayed(Duration.zero);
