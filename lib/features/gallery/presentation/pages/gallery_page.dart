@@ -169,7 +169,7 @@ class _GalleryViewState extends State<_GalleryView> {
     }
 
     context.push(
-      Routes.optimize,
+      Routes.optimizeItem,
       extra: OptimizeArgs(item: items.first),
     );
   }

@@ -668,7 +668,7 @@ class _BottomBar extends StatelessWidget {
           const SizedBox(height: 14),
           GestureDetector(
             onTap: () => context.push(
-              Routes.optimize,
+              Routes.optimizeItem,
               extra: OptimizeArgs(item: item),
             ),
             child: Container(

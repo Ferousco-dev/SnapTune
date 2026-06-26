@@ -39,6 +39,13 @@ final GoRouter appRouter = GoRouter(
       pageBuilder: (_, state) => _fade(state, const PeoplePage()),
     ),
     GoRoute(
+      path: Routes.optimizeItem,
+      pageBuilder: (_, state) {
+        final args = state.extra as OptimizeArgs?;
+        return _fade(state, OptimizePage(args: args));
+      },
+    ),
+    GoRoute(
       path: Routes.processing,
       pageBuilder: (_, state) {
         final args = state.extra as ProcessingArgs?;
