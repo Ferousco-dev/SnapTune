@@ -9,6 +9,7 @@ import '../../features/optimize/presentation/pages/optimize_page.dart'
 import '../../features/favorites/presentation/pages/favorites_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
 import '../../features/viewer/presentation/pages/viewer_page.dart';
+import '../../features/people/presentation/pages/people_page.dart';
 import '../../features/optimize/presentation/pages/processing_page.dart';
 import '../../features/optimize/presentation/pages/result_page.dart';
 import '../../shared/widgets/app_shell.dart';
@@ -32,6 +33,10 @@ final GoRouter appRouter = GoRouter(
         final args = state.extra as ViewerArgs;
         return _fade(state, ViewerPage(args: args));
       },
+    ),
+    GoRoute(
+      path: Routes.people,
+      pageBuilder: (_, state) => _fade(state, const PeoplePage()),
     ),
     GoRoute(
       path: Routes.processing,
