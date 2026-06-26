@@ -30,6 +30,7 @@ class _ResultPageState extends State<ResultPage>
   late final Animation<double> _fadeAnim;
   bool _sharing = false;
   bool _saving = false;
+  final _shareButtonKey = GlobalKey();
 
   @override
   void initState() {
@@ -63,7 +64,18 @@ class _ResultPageState extends State<ResultPage>
       final asset = await AssetEntity.fromId(item.id);
       final file = await asset?.file;
       if (file == null || !mounted) return;
-      await Share.shareXFiles([XFile(file.path)]);
+
+      // iOS requires sharePositionOrigin to anchor the popover
+      final box = _shareButtonKey.currentContext?.findRenderObject()
+          as RenderBox?;
+      final origin = box != null
+          ? box.localToGlobal(Offset.zero) & box.size
+          : const Rect.fromLTWH(0, 400, 100, 50);
+
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        sharePositionOrigin: origin,
+      );
     } finally {
       if (mounted) setState(() => _sharing = false);
     }
@@ -212,6 +224,7 @@ class _ResultPageState extends State<ResultPage>
                 children: [
                   // Share Now
                   GestureDetector(
+                    key: _shareButtonKey,
                     onTap: _sharing ? null : _shareNow,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 150),
