@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../../../core/di/service_locator.dart';
+import '../../../../core/services/theme_notifier.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/constants/app_spacing.dart';
@@ -11,6 +13,13 @@ class SettingsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final theme = Theme.of(context);
+    final currentMode = sl<ThemeNotifier>().mode;
+
+    final appearanceSubtitle = switch (currentMode) {
+      ThemeMode.light => 'Light',
+      ThemeMode.dark => 'Dark',
+      _ => 'Follow system',
+    };
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -47,7 +56,7 @@ class SettingsPage extends StatelessWidget {
                 icon: Icons.palette_outlined,
                 iconColor: AppColors.violet,
                 title: 'Appearance',
-                subtitle: 'Follow system',
+                subtitle: appearanceSubtitle,
                 trailing: const Icon(
                   Icons.chevron_right_rounded,
                   size: 20,
@@ -240,17 +249,13 @@ class _AppCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: Colors.white.withAlpha(30),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Icon(
-              Icons.auto_fix_high_rounded,
-              color: Colors.white,
-              size: 28,
+          ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: Image.asset(
+              'assets/images/logo.png',
+              width: 56,
+              height: 56,
+              fit: BoxFit.cover,
             ),
           ),
           const SizedBox(width: AppSpacing.md),
@@ -428,6 +433,8 @@ class _AppearanceSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final currentMode = sl<ThemeNotifier>().mode;
+
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
@@ -445,7 +452,9 @@ class _AppearanceSheet extends StatelessWidget {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: isDark ? AppColors.darkOutline : AppColors.outlineVariant,
+                  color: isDark
+                      ? AppColors.darkOutline
+                      : AppColors.outlineVariant,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -460,29 +469,40 @@ class _AppearanceSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: AppSpacing.md),
-            ..._themeOptions(context),
+            _SheetOption(
+              isDark: isDark,
+              icon: Icons.brightness_auto_rounded,
+              label: 'Follow system',
+              selected: currentMode == ThemeMode.system,
+              onTap: () {
+                sl<ThemeNotifier>().setMode(ThemeMode.system);
+                Navigator.pop(context);
+              },
+            ),
+            _SheetOption(
+              isDark: isDark,
+              icon: Icons.light_mode_rounded,
+              label: 'Light',
+              selected: currentMode == ThemeMode.light,
+              onTap: () {
+                sl<ThemeNotifier>().setMode(ThemeMode.light);
+                Navigator.pop(context);
+              },
+            ),
+            _SheetOption(
+              isDark: isDark,
+              icon: Icons.dark_mode_rounded,
+              label: 'Dark',
+              selected: currentMode == ThemeMode.dark,
+              onTap: () {
+                sl<ThemeNotifier>().setMode(ThemeMode.dark);
+                Navigator.pop(context);
+              },
+            ),
           ],
         ),
       ),
     );
-  }
-
-  List<Widget> _themeOptions(BuildContext context) {
-    final options = [
-      (Icons.brightness_auto_rounded, 'Follow system', true),
-      (Icons.light_mode_rounded, 'Light', false),
-      (Icons.dark_mode_rounded, 'Dark', false),
-    ];
-    return options.map((opt) {
-      final (icon, label, selected) = opt;
-      return _SheetOption(
-        isDark: isDark,
-        icon: icon,
-        label: label,
-        selected: selected,
-        onTap: () => Navigator.pop(context),
-      );
-    }).toList();
   }
 }
 
@@ -509,7 +529,9 @@ class _GridSheet extends StatelessWidget {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: isDark ? AppColors.darkOutline : AppColors.outlineVariant,
+                  color: isDark
+                      ? AppColors.darkOutline
+                      : AppColors.outlineVariant,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
