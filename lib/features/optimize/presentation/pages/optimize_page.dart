@@ -24,7 +24,7 @@ class OptimizePage extends StatefulWidget {
 }
 
 class _OptimizePageState extends State<OptimizePage> {
-  PlatformId _selected = PlatformId.whatsappStatus;
+  PlatformId _selected = PlatformId.whatsapp;
 
   // Photo picker state — only used when args == null (tab opened directly)
   List<AssetEntity> _recentAssets = [];

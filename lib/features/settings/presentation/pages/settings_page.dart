@@ -19,7 +19,7 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  String _defaultPlatformId = 'whatsappStatus';
+  String _defaultPlatformId = 'whatsapp';
   String _qualityMode = 'Balanced';
 
   @override
@@ -33,7 +33,7 @@ class _SettingsPageState extends State<SettingsPage> {
     if (!mounted) return;
     setState(() {
       _defaultPlatformId =
-          prefs.getString('default_platform') ?? 'whatsappStatus';
+          prefs.getString('default_platform') ?? 'whatsapp';
       _qualityMode = prefs.getString('quality_mode') ?? 'Balanced';
     });
   }
