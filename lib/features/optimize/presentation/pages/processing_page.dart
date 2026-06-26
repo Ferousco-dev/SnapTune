@@ -120,36 +120,46 @@ class _ProcessingPageState extends State<ProcessingPage>
 
     _setStep(0, 0.05);
 
-    Uint8List? inputBytes;
-    if (item != null) {
-      try {
-        final asset = await AssetEntity.fromId(item.id);
-        inputBytes = await asset?.originBytes;
-      } catch (_) {}
-    }
-
-    if (!mounted) return;
-
-    if (inputBytes == null || item == null) {
-      // No media: skip straight to result with no bytes
-      _setStep(3, 1.0);
-      await Future.delayed(const Duration(milliseconds: 400));
-      if (!mounted) return;
-      context.pushReplacement(
-        Routes.result,
-        extra: ResultArgs(preset: preset),
-      );
-      return;
-    }
-
     // Video files can't be re-encoded by the image package — pass through
-    if (item.isVideo) {
+    if (item?.isVideo == true) {
       _setStep(3, 1.0);
       await Future.delayed(const Duration(milliseconds: 400));
       if (!mounted) return;
       context.pushReplacement(
         Routes.result,
         extra: ResultArgs(preset: preset, item: item),
+      );
+      return;
+    }
+
+    Uint8List? inputBytes;
+    if (item != null) {
+      try {
+        final asset = await AssetEntity.fromId(item.id);
+        if (asset != null) {
+          // Use thumbnailDataWithSize so iOS converts HEIC/HEIF/ProRAW to JPEG
+          // before we send bytes to the isolate — the image package only decodes JPEG/PNG.
+          // Request at the preset target size so iOS handles the resize natively.
+          final targetW = preset.maxWidth > 0 ? preset.maxWidth : asset.width;
+          final targetH = preset.maxHeight > 0 ? preset.maxHeight : asset.height;
+          inputBytes = await asset.thumbnailDataWithSize(
+            ThumbnailSize(targetW, targetH),
+            format: ThumbnailFormat.jpeg,
+            quality: 100,
+          );
+        }
+      } catch (_) {}
+    }
+
+    if (!mounted) return;
+
+    if (inputBytes == null || item == null) {
+      _setStep(3, 1.0);
+      await Future.delayed(const Duration(milliseconds: 400));
+      if (!mounted) return;
+      context.pushReplacement(
+        Routes.result,
+        extra: ResultArgs(preset: preset),
       );
       return;
     }
