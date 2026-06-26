@@ -104,12 +104,11 @@ class _AlbumsPageState extends State<AlbumsPage> {
   }
 
   Future<void> _showCreateAlbumDialog() async {
-    // Return the trimmed name directly so the controller can be disposed
-    // inside the dialog widget before we continue — avoids use-after-dispose
-    // during the dialog's close animation.
-    final name = await showDialog<String>(
+    final name = await showModalBottomSheet<String>(
       context: context,
-      builder: (ctx) => _CreateAlbumDialog(),
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _CreateAlbumSheet(),
     );
     if (name == null || name.isEmpty) return;
     if (!Platform.isIOS && !Platform.isMacOS) {
@@ -250,12 +249,12 @@ class _AlbumsPageState extends State<AlbumsPage> {
   }
 }
 
-class _CreateAlbumDialog extends StatefulWidget {
+class _CreateAlbumSheet extends StatefulWidget {
   @override
-  State<_CreateAlbumDialog> createState() => _CreateAlbumDialogState();
+  State<_CreateAlbumSheet> createState() => _CreateAlbumSheetState();
 }
 
-class _CreateAlbumDialogState extends State<_CreateAlbumDialog> {
+class _CreateAlbumSheetState extends State<_CreateAlbumSheet> {
   final _ctrl = TextEditingController();
 
   @override
@@ -264,30 +263,151 @@ class _CreateAlbumDialogState extends State<_CreateAlbumDialog> {
     super.dispose();
   }
 
+  void _submit() {
+    final name = _ctrl.text.trim();
+    Navigator.pop(context, name);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(
-        'New Album',
-        style: AppTypography.outfit(fontSize: 18, fontWeight: FontWeight.w700),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      padding: EdgeInsets.fromLTRB(24, 20, 24, 24 + bottom),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurface : Colors.white,
+        borderRadius: BorderRadius.circular(24),
       ),
-      content: TextField(
-        controller: _ctrl,
-        autofocus: true,
-        textCapitalization: TextCapitalization.words,
-        decoration: const InputDecoration(hintText: 'Album name'),
-        onSubmitted: (v) => Navigator.pop(context, v.trim()),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Drag handle
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.darkOutline : AppColors.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+
+          Text(
+            'New Album',
+            style: AppTypography.outfit(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: theme.colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Give your album a name',
+            style: AppTypography.dmSans(
+              fontSize: 13,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Name field
+          Container(
+            decoration: BoxDecoration(
+              color: isDark
+                  ? AppColors.darkSurfaceVariant
+                  : AppColors.surfaceVariant,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextField(
+              controller: _ctrl,
+              autofocus: true,
+              textCapitalization: TextCapitalization.words,
+              onSubmitted: (_) => _submit(),
+              style: AppTypography.dmSans(
+                fontSize: 15,
+                color: theme.colorScheme.onSurface,
+              ),
+              decoration: InputDecoration(
+                hintText: 'e.g. Summer 2025',
+                hintStyle: AppTypography.dmSans(
+                  fontSize: 15,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Buttons
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => Navigator.pop(context, null),
+                  child: Container(
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? AppColors.darkSurfaceVariant
+                          : AppColors.surfaceVariant,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Center(
+                      child: Text(
+                        'Cancel',
+                        style: AppTypography.dmSans(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.onSurface,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: GestureDetector(
+                  onTap: _submit,
+                  child: Container(
+                    height: 50,
+                    decoration: BoxDecoration(
+                      gradient: AppColors.brandGradient,
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withAlpha(70),
+                          blurRadius: 16,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Text(
+                        'Create',
+                        style: AppTypography.dmSans(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, null),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, _ctrl.text.trim()),
-          child: const Text('Create'),
-        ),
-      ],
     );
   }
 }
