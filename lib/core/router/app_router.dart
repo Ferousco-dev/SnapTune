@@ -52,26 +52,26 @@ final GoRouter appRouter = GoRouter(
       routes: [
         GoRoute(
           path: Routes.gallery,
-          pageBuilder: (_, state) => _noTransition(state, const GalleryPage()),
+          pageBuilder: (_, state) => _fadeShell(state, const GalleryPage()),
         ),
         GoRoute(
           path: Routes.albums,
-          pageBuilder: (_, state) => _noTransition(state, const AlbumsPage()),
+          pageBuilder: (_, state) => _fadeShell(state, const AlbumsPage()),
         ),
         GoRoute(
           path: Routes.optimize,
           pageBuilder: (_, state) {
             final args = state.extra as OptimizeArgs?;
-            return _noTransition(state, OptimizePage(args: args));
+            return _fadeShell(state, OptimizePage(args: args));
           },
         ),
         GoRoute(
           path: Routes.favorites,
-          pageBuilder: (_, state) => _noTransition(state, const FavoritesPage()),
+          pageBuilder: (_, state) => _fadeShell(state, const FavoritesPage()),
         ),
         GoRoute(
           path: Routes.settings,
-          pageBuilder: (_, state) => _noTransition(state, const SettingsPage()),
+          pageBuilder: (_, state) => _fadeShell(state, const SettingsPage()),
         ),
       ],
     ),
@@ -87,5 +87,13 @@ CustomTransitionPage<void> _fade(GoRouterState state, Widget child) =>
           FadeTransition(opacity: animation, child: child),
     );
 
-NoTransitionPage<void> _noTransition(GoRouterState state, Widget child) =>
-    NoTransitionPage<void>(key: state.pageKey, child: child);
+// Fast fade for shell tab routes — smooth but snappy enough not to feel slow
+CustomTransitionPage<void> _fadeShell(GoRouterState state, Widget child) =>
+    CustomTransitionPage<void>(
+      key: state.pageKey,
+      child: child,
+      transitionDuration: const Duration(milliseconds: 200),
+      transitionsBuilder: (_, animation, _, child) =>
+          FadeTransition(opacity: animation, child: child),
+    );
+
