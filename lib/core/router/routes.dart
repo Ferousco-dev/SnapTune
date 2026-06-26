@@ -7,6 +7,7 @@ abstract final class Routes {
   static const String favorites = '/favorites';
   static const String settings = '/settings';
   static const String viewer = '/viewer';
+  static const String people = '/people';
   static const String processing = '/processing';
   static const String result = '/result';
 }
