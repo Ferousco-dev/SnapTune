@@ -224,7 +224,9 @@ class _ResultPageState extends State<ResultPage>
             FadeTransition(
               opacity: _fadeAnim,
               child: Text(
-                'Optimized for ${preset.name}',
+                widget.args?.item?.isVideo == true
+                    ? 'Video ready for ${preset.name}'
+                    : 'Optimized for ${preset.name}',
                 style: AppTypography.dmSans(
                   fontSize: 14,
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
