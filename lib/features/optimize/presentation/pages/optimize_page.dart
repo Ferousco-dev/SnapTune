@@ -1,9 +1,12 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:photo_manager/photo_manager.dart';
 import '../../../../core/router/routes.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/constants/app_spacing.dart';
+import '../../../gallery/data/models/media_item_model.dart';
 import '../../../gallery/domain/entities/media_item.dart';
 import '../../domain/entities/platform_preset.dart';
 
@@ -22,6 +25,53 @@ class OptimizePage extends StatefulWidget {
 
 class _OptimizePageState extends State<OptimizePage> {
   PlatformId _selected = PlatformId.whatsappStatus;
+
+  // Photo picker state — only used when args == null (tab opened directly)
+  List<AssetEntity> _recentAssets = [];
+  AssetEntity? _pickedAsset;
+  bool _loadingAssets = false;
+
+  bool get _hasPreSelected => widget.args != null;
+
+  MediaItem? get _effectiveItem {
+    if (_hasPreSelected) return widget.args!.item;
+    if (_pickedAsset != null) return MediaItemModel.fromAsset(_pickedAsset!);
+    return null;
+  }
+
+  bool get _canStart => _effectiveItem != null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (!_hasPreSelected) _loadRecents();
+  }
+
+  Future<void> _loadRecents() async {
+    setState(() => _loadingAssets = true);
+    try {
+      final albums = await PhotoManager.getAssetPathList(
+        type: RequestType.image,
+        onlyAll: true,
+      );
+      if (albums.isEmpty || !mounted) return;
+      final assets = await albums.first.getAssetListRange(start: 0, end: 40);
+      if (!mounted) return;
+      setState(() => _recentAssets = assets);
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _loadingAssets = false);
+    }
+  }
+
+  void _startOptimization() {
+    if (!_canStart) return;
+    final preset = PlatformPreset.all.firstWhere((p) => p.id == _selected);
+    context.push(
+      Routes.processing,
+      extra: ProcessingArgs(item: _effectiveItem, preset: preset),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,6 +99,31 @@ class _OptimizePageState extends State<OptimizePage> {
             child: ListView(
               padding: const EdgeInsets.all(AppSpacing.md),
               children: [
+                // Photo picker — only shown when opened from the Optimize tab
+                if (!_hasPreSelected) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(
+                        bottom: AppSpacing.sm, top: AppSpacing.xs),
+                    child: Text(
+                      'Choose a photo',
+                      style: AppTypography.dmSans(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  _PhotoPickerStrip(
+                    isDark: isDark,
+                    assets: _recentAssets,
+                    loading: _loadingAssets,
+                    selected: _pickedAsset,
+                    onSelect: (asset) =>
+                        setState(() => _pickedAsset = asset),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                ],
+
                 // Section header
                 Padding(
                   padding: const EdgeInsets.only(
@@ -117,43 +192,42 @@ class _OptimizePageState extends State<OptimizePage> {
               AppSpacing.lg,
               MediaQuery.of(context).padding.bottom + AppSpacing.md,
             ),
-            child: GestureDetector(
-              onTap: () => context.push(
-                Routes.processing,
-                extra: ProcessingArgs(
-                  item: widget.args?.item,
-                  preset: PlatformPreset.all
-                      .firstWhere((p) => p.id == _selected),
-                ),
-              ),
-              child: Container(
-                height: 54,
-                decoration: BoxDecoration(
-                  gradient: AppColors.brandGradient,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primary.withAlpha(70),
-                      blurRadius: 20,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.auto_fix_high_rounded,
-                        color: Colors.white, size: 18),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Start Optimization',
-                      style: AppTypography.dmSans(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 200),
+              opacity: _canStart ? 1.0 : 0.4,
+              child: GestureDetector(
+                onTap: _canStart ? _startOptimization : null,
+                child: Container(
+                  height: 54,
+                  decoration: BoxDecoration(
+                    gradient: AppColors.brandGradient,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: _canStart
+                        ? [
+                            BoxShadow(
+                              color: AppColors.primary.withAlpha(70),
+                              blurRadius: 20,
+                              offset: const Offset(0, 6),
+                            ),
+                          ]
+                        : [],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.auto_fix_high_rounded,
+                          color: Colors.white, size: 18),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Start Optimization',
+                        style: AppTypography.dmSans(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -163,6 +237,129 @@ class _OptimizePageState extends State<OptimizePage> {
     );
   }
 }
+
+// ── Photo picker strip ────────────────────────────────────────────────────────
+
+class _PhotoPickerStrip extends StatelessWidget {
+  final bool isDark;
+  final List<AssetEntity> assets;
+  final bool loading;
+  final AssetEntity? selected;
+  final ValueChanged<AssetEntity> onSelect;
+
+  const _PhotoPickerStrip({
+    required this.isDark,
+    required this.assets,
+    required this.loading,
+    required this.selected,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return SizedBox(
+        height: 88,
+        child: Center(
+          child: SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: AppColors.primary,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (assets.isEmpty) {
+      return Container(
+        height: 88,
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.darkSurface : AppColors.surfaceVariant,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isDark ? AppColors.darkOutline : AppColors.outline,
+            width: 0.5,
+          ),
+        ),
+        child: Center(
+          child: Text(
+            'No photos found',
+            style: AppTypography.dmSans(
+              fontSize: 13,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: 88,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: assets.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final asset = assets[index];
+          final isSelected = selected?.id == asset.id;
+          return GestureDetector(
+            onTap: () => onSelect(asset),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              width: 80,
+              height: 88,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isSelected ? AppColors.primary : Colors.transparent,
+                  width: 2.5,
+                ),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    FutureBuilder<Uint8List?>(
+                      future: asset.thumbnailDataWithSize(
+                          const ThumbnailSize.square(160)),
+                      builder: (context, snap) {
+                        if (snap.data == null) {
+                          return Container(
+                            color: isDark
+                                ? AppColors.darkSurface
+                                : AppColors.surfaceVariant,
+                          );
+                        }
+                        return Image.memory(snap.data!, fit: BoxFit.cover);
+                      },
+                    ),
+                    if (isSelected)
+                      Container(
+                        color: AppColors.primary.withAlpha(60),
+                        child: const Center(
+                          child: Icon(
+                            Icons.check_circle_rounded,
+                            color: Colors.white,
+                            size: 26,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ── Platform card ─────────────────────────────────────────────────────────────
 
 class _PlatformCard extends StatelessWidget {
   final PlatformPreset preset;
