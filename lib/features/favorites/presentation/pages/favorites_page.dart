@@ -50,6 +50,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
       final asset = await AssetEntity.fromId(id);
       if (asset != null) items.add(MediaItemModel.fromAsset(asset));
     }
+    items.sort((a, b) => b.createDate.compareTo(a.createDate));
     if (!mounted) return;
     setState(() {
       _items = items;
