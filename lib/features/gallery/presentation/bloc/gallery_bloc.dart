@@ -1,4 +1,7 @@
+import 'dart:async';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:photo_manager/photo_manager.dart';
 import '../../domain/entities/media_item.dart';
 import '../../domain/usecases/get_recent_media.dart';
 import '../../domain/usecases/request_gallery_permission.dart';
@@ -8,6 +11,7 @@ import 'gallery_state.dart';
 class GalleryBloc extends Bloc<GalleryEvent, GalleryState> {
   final RequestGalleryPermission _requestPermission;
   final GetRecentMedia _getRecentMedia;
+  Timer? _changeDebounce;
 
   static const _pageSize = 80;
 
@@ -21,6 +25,28 @@ class GalleryBloc extends Bloc<GalleryEvent, GalleryState> {
     on<GalleryFilterChanged>(_onFilterChanged);
     on<GalleryLoadMore>(_onLoadMore);
     on<GalleryRefreshed>(_onRefreshed);
+
+    PhotoManager.addChangeCallback(_onLibraryChanged);
+    PhotoManager.startChangeNotify();
+  }
+
+  // Fires whenever iOS/Android reports a photo library change.
+  // Debounced 600ms to batch rapid changes (e.g. multi-delete).
+  void _onLibraryChanged(MethodCall call) {
+    _changeDebounce?.cancel();
+    _changeDebounce = Timer(const Duration(milliseconds: 600), () {
+      if (!isClosed && state.isLoaded) {
+        add(const GalleryRefreshed());
+      }
+    });
+  }
+
+  @override
+  Future<void> close() {
+    _changeDebounce?.cancel();
+    PhotoManager.removeChangeCallback(_onLibraryChanged);
+    PhotoManager.stopChangeNotify();
+    return super.close();
   }
 
   Future<void> _onStarted(
