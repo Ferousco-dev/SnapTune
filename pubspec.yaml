@@ -24,8 +24,8 @@ dependencies:
   # Gallery / media access
   photo_manager: ^3.6.3
 
-  # Image processing in Dart
-  image: ^4.3.0
+  # Native image compression (handles HEIC/HEIF on iOS, faster than Dart image package)
+  flutter_image_compress: ^2.4.0
 
   # File system
   path_provider: ^2.1.5
