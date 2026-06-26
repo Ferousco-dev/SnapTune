@@ -33,6 +33,7 @@ class _ViewerPageState extends State<ViewerPage> {
   late final PageController _pageController;
   late int _currentIndex;
   bool _overlaysVisible = true;
+  bool _photoZoomed = false;
 
   @override
   void initState() {
@@ -88,13 +89,27 @@ class _ViewerPageState extends State<ViewerPage> {
             behavior: HitTestBehavior.opaque,
             child: PageView.builder(
               controller: _pageController,
+              // Lock horizontal swipe while a photo is zoomed in
+              physics: _photoZoomed
+                  ? const NeverScrollableScrollPhysics()
+                  : null,
               itemCount: _items.length,
-              onPageChanged: (i) => setState(() => _currentIndex = i),
+              onPageChanged: (i) => setState(() {
+                _currentIndex = i;
+                _photoZoomed = false;
+              }),
               itemBuilder: (_, i) {
                 final item = _items[i];
                 return item.isVideo
                     ? _VideoViewer(item: item)
-                    : _PhotoViewer(item: item);
+                    : _PhotoViewer(
+                        item: item,
+                        onZoomChanged: (zoomed) {
+                          if (_photoZoomed != zoomed) {
+                            setState(() => _photoZoomed = zoomed);
+                          }
+                        },
+                      );
               },
             ),
           ),
@@ -136,7 +151,8 @@ class _ViewerPageState extends State<ViewerPage> {
 
 class _PhotoViewer extends StatefulWidget {
   final MediaItem item;
-  const _PhotoViewer({required this.item});
+  final void Function(bool isZoomed)? onZoomChanged;
+  const _PhotoViewer({required this.item, this.onZoomChanged});
 
   @override
   State<_PhotoViewer> createState() => _PhotoViewerState();
@@ -145,11 +161,30 @@ class _PhotoViewer extends StatefulWidget {
 class _PhotoViewerState extends State<_PhotoViewer> {
   Uint8List? _bytes;
   bool _loading = true;
+  final _transformCtrl = TransformationController();
+  TapDownDetails? _doubleTapDetails;
+  bool _wasZoomed = false;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _transformCtrl.addListener(_onTransform);
+  }
+
+  void _onTransform() {
+    final zoomed = _transformCtrl.value.getMaxScaleOnAxis() > 1.05;
+    if (zoomed != _wasZoomed) {
+      _wasZoomed = zoomed;
+      widget.onZoomChanged?.call(zoomed);
+    }
+  }
+
+  @override
+  void dispose() {
+    _transformCtrl.removeListener(_onTransform);
+    _transformCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -164,6 +199,25 @@ class _PhotoViewerState extends State<_PhotoViewer> {
       _bytes = bytes;
       _loading = false;
     });
+  }
+
+  void _onDoubleTapDown(TapDownDetails details) {
+    _doubleTapDetails = details;
+  }
+
+  void _onDoubleTap() {
+    if (_wasZoomed) {
+      _transformCtrl.value = Matrix4.identity();
+      return;
+    }
+    const scale = 2.5;
+    final pos = _doubleTapDetails!.localPosition;
+    final size = context.size ?? const Size(390, 844);
+    // Translate so the tap point lands at the viewport center after scaling
+    final dx = size.width / 2 - pos.dx * scale;
+    final dy = size.height / 2 - pos.dy * scale;
+    _transformCtrl.value = Matrix4.translationValues(dx, dy, 0)
+      ..scaleByDouble(scale, scale, 1.0, 1.0);
   }
 
   @override
@@ -184,11 +238,16 @@ class _PhotoViewerState extends State<_PhotoViewer> {
             color: Colors.white30, size: 48),
       );
     }
-    return InteractiveViewer(
-      minScale: 1.0,
-      maxScale: 4.0,
-      child: Center(
-        child: Image.memory(_bytes!, fit: BoxFit.contain, gaplessPlayback: true),
+    return GestureDetector(
+      onDoubleTapDown: _onDoubleTapDown,
+      onDoubleTap: _onDoubleTap,
+      child: InteractiveViewer(
+        transformationController: _transformCtrl,
+        minScale: 1.0,
+        maxScale: 4.0,
+        child: Center(
+          child: Image.memory(_bytes!, fit: BoxFit.contain, gaplessPlayback: true),
+        ),
       ),
     );
   }
