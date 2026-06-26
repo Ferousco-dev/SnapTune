@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
@@ -35,6 +36,7 @@ class _GalleryView extends StatefulWidget {
 
 class _GalleryViewState extends State<_GalleryView> {
   final _scrollController = ScrollController();
+  bool _sortNewest = true;
 
   @override
   void initState() {
@@ -55,6 +57,53 @@ class _GalleryViewState extends State<_GalleryView> {
     super.dispose();
   }
 
+  List<MediaItem> _sorted(List<MediaItem> items) {
+    final copy = List<MediaItem>.from(items);
+    copy.sort((a, b) => _sortNewest
+        ? b.createDate.compareTo(a.createDate)
+        : a.createDate.compareTo(b.createDate));
+    return copy;
+  }
+
+  void _showMoreMenu(BuildContext ctx, List<MediaItem> items) {
+    HapticFeedback.selectionClick();
+    final isDark = Theme.of(ctx).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: ctx,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => _GalleryOptionsSheet(
+        isDark: isDark,
+        sortNewest: _sortNewest,
+        onSortNewest: () {
+          Navigator.pop(sheetCtx);
+          setState(() => _sortNewest = true);
+        },
+        onSortOldest: () {
+          Navigator.pop(sheetCtx);
+          setState(() => _sortNewest = false);
+        },
+        onRefresh: () {
+          Navigator.pop(sheetCtx);
+          ctx.read<GalleryBloc>().add(const GalleryRefreshed());
+        },
+      ),
+    );
+  }
+
+  void _openSearch(List<MediaItem> items) {
+    showSearch<MediaItem?>(
+      context: context,
+      delegate: _GallerySearchDelegate(items: items),
+    ).then((result) {
+      if (result != null && mounted) {
+        context.push(
+          Routes.viewer,
+          extra: ViewerArgs(items: items, startIndex: items.indexOf(result)),
+        );
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -63,19 +112,26 @@ class _GalleryViewState extends State<_GalleryView> {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: BlocBuilder<GalleryBloc, GalleryState>(
         builder: (context, state) {
+          final sorted = _sorted(state.items);
           return CustomScrollView(
             controller: _scrollController,
             slivers: [
-              _AppBar(isDark: isDark),
+              _AppBar(
+                isDark: isDark,
+                onSearch: () => _openSearch(state.items),
+                onMore: () => _showMoreMenu(context, state.items),
+                sortNewest: _sortNewest,
+              ),
               _FilterBar(activeFilter: state.activeFilter),
               if (state.status == GalleryStatus.permissionDenied)
                 const SliverFillRemaining(child: _PermissionDeniedView())
-              else if (state.status == GalleryStatus.loading && state.items.isEmpty)
+              else if (state.status == GalleryStatus.loading &&
+                  state.items.isEmpty)
                 const SliverFillRemaining(child: _LoadingView())
               else if (state.isEmpty)
                 const SliverFillRemaining(child: _EmptyView())
               else ...[
-                _MediaGrid(items: state.items),
+                _MediaGrid(items: sorted, rawItems: state.items),
                 if (state.hasMore && state.isLoaded)
                   const SliverToBoxAdapter(child: _LoadMoreIndicator()),
               ],
@@ -87,9 +143,20 @@ class _GalleryViewState extends State<_GalleryView> {
   }
 }
 
+// ── App bar ───────────────────────────────────────────────────────────────────
+
 class _AppBar extends StatelessWidget {
   final bool isDark;
-  const _AppBar({required this.isDark});
+  final bool sortNewest;
+  final VoidCallback onSearch;
+  final VoidCallback onMore;
+
+  const _AppBar({
+    required this.isDark,
+    required this.onSearch,
+    required this.onMore,
+    required this.sortNewest,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -114,20 +181,376 @@ class _AppBar extends StatelessWidget {
             Icons.search_rounded,
             color: Theme.of(context).colorScheme.onSurface,
           ),
-          onPressed: () {},
+          onPressed: onSearch,
         ),
         IconButton(
           icon: Icon(
             Icons.more_vert_rounded,
             color: Theme.of(context).colorScheme.onSurface,
           ),
-          onPressed: () {},
+          onPressed: onMore,
         ),
         const SizedBox(width: 4),
       ],
     );
   }
 }
+
+// ── Gallery options sheet ─────────────────────────────────────────────────────
+
+class _GalleryOptionsSheet extends StatelessWidget {
+  final bool isDark;
+  final bool sortNewest;
+  final VoidCallback onSortNewest;
+  final VoidCallback onSortOldest;
+  final VoidCallback onRefresh;
+
+  const _GalleryOptionsSheet({
+    required this.isDark,
+    required this.sortNewest,
+    required this.onSortNewest,
+    required this.onSortOldest,
+    required this.onRefresh,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = isDark ? AppColors.darkSurface : Colors.white;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 10),
+          Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.darkOutline : AppColors.outlineVariant,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 6),
+
+          // Sort section header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md, 14, AppSpacing.md, 6),
+            child: Row(
+              children: [
+                Text(
+                  'Sort by',
+                  style: AppTypography.dmSans(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isDark
+                        ? AppColors.darkOnSurfaceVariant
+                        : AppColors.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          _OptionTile(
+            icon: Icons.arrow_downward_rounded,
+            label: 'Newest first',
+            isDark: isDark,
+            trailing: sortNewest
+                ? const Icon(Icons.check_rounded,
+                    color: AppColors.primary, size: 18)
+                : null,
+            onTap: onSortNewest,
+          ),
+          _OptionTile(
+            icon: Icons.arrow_upward_rounded,
+            label: 'Oldest first',
+            isDark: isDark,
+            trailing: !sortNewest
+                ? const Icon(Icons.check_rounded,
+                    color: AppColors.primary, size: 18)
+                : null,
+            onTap: onSortOldest,
+          ),
+
+          _SheetDivider(isDark: isDark),
+
+          _OptionTile(
+            icon: Icons.refresh_rounded,
+            label: 'Refresh',
+            isDark: isDark,
+            onTap: onRefresh,
+          ),
+          _OptionTile(
+            icon: Icons.check_box_outline_blank_rounded,
+            label: 'Select items',
+            isDark: isDark,
+            onTap: () => Navigator.pop(context),
+          ),
+
+          SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
+        ],
+      ),
+    );
+  }
+}
+
+class _OptionTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool isDark;
+  final Widget? trailing;
+  final VoidCallback onTap;
+
+  const _OptionTile({
+    required this.icon,
+    required this.label,
+    required this.isDark,
+    required this.onTap,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md, vertical: 14),
+        child: Row(
+          children: [
+            Icon(icon,
+                size: 20,
+                color: Theme.of(context).colorScheme.onSurface),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                label,
+                style: AppTypography.dmSans(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+            ),
+            ?trailing,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetDivider extends StatelessWidget {
+  final bool isDark;
+  const _SheetDivider({required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    return Divider(
+      height: 1,
+      thickness: 0.5,
+      color: isDark ? AppColors.darkOutline : AppColors.outlineVariant,
+      indent: AppSpacing.md,
+      endIndent: AppSpacing.md,
+    );
+  }
+}
+
+// ── Search delegate ───────────────────────────────────────────────────────────
+
+class _GallerySearchDelegate extends SearchDelegate<MediaItem?> {
+  final List<MediaItem> items;
+
+  _GallerySearchDelegate({required this.items});
+
+  @override
+  String get searchFieldLabel => 'Search by date or month...';
+
+  @override
+  ThemeData appBarTheme(BuildContext context) {
+    final theme = Theme.of(context);
+    return theme.copyWith(
+      appBarTheme: AppBarTheme(
+        backgroundColor: theme.scaffoldBackgroundColor,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+      ),
+      inputDecorationTheme: const InputDecorationTheme(
+        border: InputBorder.none,
+      ),
+    );
+  }
+
+  List<MediaItem> get _filtered {
+    if (query.trim().isEmpty) return [];
+    final q = query.toLowerCase();
+    return items.where((item) {
+      final label = DateFormat('MMMM yyyy').format(item.createDate).toLowerCase();
+      final dayLabel = DateFormat('d MMMM yyyy').format(item.createDate).toLowerCase();
+      return label.contains(q) || dayLabel.contains(q);
+    }).toList();
+  }
+
+  @override
+  List<Widget> buildActions(BuildContext context) {
+    return [
+      if (query.isNotEmpty)
+        IconButton(
+          icon: const Icon(Icons.clear_rounded),
+          onPressed: () => query = '',
+        ),
+    ];
+  }
+
+  @override
+  Widget buildLeading(BuildContext context) {
+    return IconButton(
+      icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+      onPressed: () => close(context, null),
+    );
+  }
+
+  @override
+  Widget buildSuggestions(BuildContext context) {
+    if (query.trim().isEmpty) {
+      return _RecentMonths(
+        items: items,
+        onTap: (month) => query = month,
+      );
+    }
+    return _ResultGrid(
+      results: _filtered,
+      allItems: items,
+      onTap: (item) => close(context, item),
+    );
+  }
+
+  @override
+  Widget buildResults(BuildContext context) {
+    final results = _filtered;
+    if (results.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.search_off_rounded,
+                size: 48,
+                color: Theme.of(context).colorScheme.onSurfaceVariant),
+            const SizedBox(height: 12),
+            Text(
+              'No results for "$query"',
+              style: AppTypography.dmSans(
+                fontSize: 14,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return _ResultGrid(
+      results: results,
+      allItems: items,
+      onTap: (item) => close(context, item),
+    );
+  }
+}
+
+class _RecentMonths extends StatelessWidget {
+  final List<MediaItem> items;
+  final void Function(String) onTap;
+
+  const _RecentMonths({required this.items, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final months = <String>{};
+    for (final item in items) {
+      months.add(DateFormat('MMMM yyyy').format(item.createDate));
+    }
+    final sorted = months.toList()..sort((a, b) => b.compareTo(a));
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return ListView(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      children: [
+        Text(
+          'Recent months',
+          style: AppTypography.dmSans(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: sorted.take(12).map((month) {
+            return GestureDetector(
+              onTap: () => onTap(month),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? AppColors.darkSurfaceVariant
+                      : AppColors.surfaceVariant,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  month,
+                  style: AppTypography.dmSans(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+}
+
+class _ResultGrid extends StatelessWidget {
+  final List<MediaItem> results;
+  final List<MediaItem> allItems;
+  final void Function(MediaItem) onTap;
+
+  const _ResultGrid({
+    required this.results,
+    required this.allItems,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.builder(
+      padding: const EdgeInsets.all(2),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        mainAxisSpacing: 2,
+        crossAxisSpacing: 2,
+      ),
+      itemCount: results.length,
+      itemBuilder: (_, i) => MediaThumbnail(
+        item: results[i],
+        onTap: () => onTap(results[i]),
+      ),
+    );
+  }
+}
+
+// ── Filter bar ────────────────────────────────────────────────────────────────
 
 class _FilterBar extends StatelessWidget {
   final MediaType? activeFilter;
@@ -160,12 +583,15 @@ class _FilterBar extends StatelessWidget {
                   .add(GalleryFilterChanged(entry.value)),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 6),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: isActive
                       ? AppColors.primary
-                      : (isDark ? AppColors.darkSurfaceVariant : AppColors.surfaceVariant),
+                      : (isDark
+                          ? AppColors.darkSurfaceVariant
+                          : AppColors.surfaceVariant),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
@@ -175,7 +601,9 @@ class _FilterBar extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                     color: isActive
                         ? Colors.white
-                        : (isDark ? AppColors.darkOnSurfaceVariant : AppColors.onSurfaceVariant),
+                        : (isDark
+                            ? AppColors.darkOnSurfaceVariant
+                            : AppColors.onSurfaceVariant),
                   ),
                 ),
               ),
@@ -187,9 +615,13 @@ class _FilterBar extends StatelessWidget {
   }
 }
 
+// ── Media grid ────────────────────────────────────────────────────────────────
+
 class _MediaGrid extends StatelessWidget {
   final List<MediaItem> items;
-  const _MediaGrid({required this.items});
+  final List<MediaItem> rawItems;
+
+  const _MediaGrid({required this.items, required this.rawItems});
 
   @override
   Widget build(BuildContext context) {
@@ -275,6 +707,8 @@ class _MonthSection extends StatelessWidget {
   }
 }
 
+// ── State views ───────────────────────────────────────────────────────────────
+
 class _PermissionDeniedView extends StatelessWidget {
   const _PermissionDeniedView();
 
@@ -318,9 +752,8 @@ class _PermissionDeniedView extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.xl),
             FilledButton(
-              onPressed: () => context
-                  .read<GalleryBloc>()
-                  .add(const GalleryStarted()),
+              onPressed: () =>
+                  context.read<GalleryBloc>().add(const GalleryStarted()),
               child: const Text('Grant Access'),
             ),
           ],
