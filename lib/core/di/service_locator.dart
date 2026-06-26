@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/prefs_service.dart';
 import '../services/theme_notifier.dart';
 import '../services/grid_columns_notifier.dart';
+import '../services/liked_ids_notifier.dart';
 import '../../features/gallery/data/datasources/gallery_local_datasource.dart';
 import '../../features/gallery/data/repositories/gallery_repository_impl.dart';
 import '../../features/gallery/domain/repositories/gallery_repository.dart';
@@ -17,6 +18,7 @@ Future<void> initDependencies() async {
   sl.registerSingleton<PrefsService>(PrefsService(prefs));
   sl.registerSingleton<ThemeNotifier>(ThemeNotifier(prefs));
   sl.registerSingleton<GridColumnsNotifier>(GridColumnsNotifier(prefs));
+  sl.registerSingleton<LikedIdsNotifier>(LikedIdsNotifier(prefs));
 
   _registerGalleryDependencies();
 }

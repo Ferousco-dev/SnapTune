@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:photo_manager/photo_manager.dart';
+import '../../../../core/di/service_locator.dart';
 import '../../../../core/router/routes.dart';
+import '../../../../core/services/liked_ids_notifier.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/constants/app_spacing.dart';
@@ -24,36 +26,30 @@ class _FavoritesPageState extends State<FavoritesPage> {
   @override
   void initState() {
     super.initState();
+    sl<LikedIdsNotifier>().addListener(_onLikesChanged);
     _load();
   }
 
+  @override
+  void dispose() {
+    sl<LikedIdsNotifier>().removeListener(_onLikesChanged);
+    super.dispose();
+  }
+
+  void _onLikesChanged() => _load();
+
   Future<void> _load() async {
-    final albums = await PhotoManager.getAssetPathList(
-      type: RequestType.common,
-      onlyAll: false,
-    );
-
-    AssetPathEntity? favAlbum;
-    for (final album in albums) {
-      if (album.name.toLowerCase() == 'favorites') {
-        favAlbum = album;
-        break;
-      }
-    }
-
-    if (favAlbum == null) {
-      if (mounted) setState(() => _loading = false);
+    final ids = sl<LikedIdsNotifier>().likedIds;
+    if (ids.isEmpty) {
+      if (mounted) setState(() { _items = []; _loading = false; });
       return;
     }
 
-    final count = await favAlbum.assetCountAsync;
-    if (count == 0) {
-      if (mounted) setState(() => _loading = false);
-      return;
+    final items = <MediaItem>[];
+    for (final id in ids) {
+      final asset = await AssetEntity.fromId(id);
+      if (asset != null) items.add(MediaItemModel.fromAsset(asset));
     }
-
-    final assets = await favAlbum.getAssetListRange(start: 0, end: count);
-    final items = assets.map((a) => MediaItemModel.fromAsset(a)).toList();
     if (!mounted) return;
     setState(() {
       _items = items;
@@ -165,7 +161,7 @@ class _EmptyFavoritesState extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Mark photos as favorites in the Photos app to see them here.',
+              'Tap the heart in the viewer to save photos here.',
               textAlign: TextAlign.center,
               style: AppTypography.dmSans(
                 fontSize: 14,

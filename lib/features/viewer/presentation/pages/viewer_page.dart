@@ -4,7 +4,9 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:video_player/video_player.dart';
+import '../../../../core/di/service_locator.dart';
 import '../../../../core/router/routes.dart';
+import '../../../../core/services/liked_ids_notifier.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/constants/app_spacing.dart';
@@ -31,7 +33,6 @@ class _ViewerPageState extends State<ViewerPage> {
   late final PageController _pageController;
   late int _currentIndex;
   bool _overlaysVisible = true;
-  final Set<String> _likedIds = {};
 
   @override
   void initState() {
@@ -39,10 +40,14 @@ class _ViewerPageState extends State<ViewerPage> {
     _currentIndex = widget.args.startIndex;
     _pageController = PageController(initialPage: widget.args.startIndex);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    sl<LikedIdsNotifier>().addListener(_onLikesChanged);
   }
+
+  void _onLikesChanged() => setState(() {});
 
   @override
   void dispose() {
+    sl<LikedIdsNotifier>().removeListener(_onLikesChanged);
     _pageController.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
@@ -52,14 +57,9 @@ class _ViewerPageState extends State<ViewerPage> {
       setState(() => _overlaysVisible = !_overlaysVisible);
 
   void _toggleLike(String id) {
-    setState(() {
-      if (_likedIds.contains(id)) {
-        _likedIds.remove(id);
-      } else {
-        _likedIds.add(id);
-        HapticFeedback.lightImpact();
-      }
-    });
+    final wasLiked = sl<LikedIdsNotifier>().isLiked(id);
+    if (!wasLiked) HapticFeedback.lightImpact();
+    sl<LikedIdsNotifier>().toggle(id);
   }
 
   void _showOptions(MediaItem item) {
@@ -109,7 +109,7 @@ class _ViewerPageState extends State<ViewerPage> {
               child: _TopBar(
                 currentIndex: _currentIndex,
                 total: _items.length,
-                isLiked: _likedIds.contains(currentItem.id),
+                isLiked: sl<LikedIdsNotifier>().isLiked(currentItem.id),
                 onLikeTap: () => _toggleLike(currentItem.id),
                 onMoreTap: () => _showOptions(currentItem),
               ),
