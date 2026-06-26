@@ -104,34 +104,14 @@ class _AlbumsPageState extends State<AlbumsPage> {
   }
 
   Future<void> _showCreateAlbumDialog() async {
-    final nameCtrl = TextEditingController();
-    final confirmed = await showDialog<bool>(
+    // Return the trimmed name directly so the controller can be disposed
+    // inside the dialog widget before we continue — avoids use-after-dispose
+    // during the dialog's close animation.
+    final name = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(
-          'New Album',
-          style: AppTypography.outfit(
-              fontSize: 18, fontWeight: FontWeight.w700),
-        ),
-        content: TextField(
-          controller: nameCtrl,
-          autofocus: true,
-          textCapitalization: TextCapitalization.words,
-          decoration: const InputDecoration(hintText: 'Album name'),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Create')),
-        ],
-      ),
+      builder: (ctx) => _CreateAlbumDialog(),
     );
-    final name = nameCtrl.text.trim();
-    nameCtrl.dispose();
-    if (confirmed != true || name.isEmpty) return;
+    if (name == null || name.isEmpty) return;
     if (!Platform.isIOS && !Platform.isMacOS) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -266,6 +246,48 @@ class _AlbumsPageState extends State<AlbumsPage> {
                   ),
               ],
             ),
+    );
+  }
+}
+
+class _CreateAlbumDialog extends StatefulWidget {
+  @override
+  State<_CreateAlbumDialog> createState() => _CreateAlbumDialogState();
+}
+
+class _CreateAlbumDialogState extends State<_CreateAlbumDialog> {
+  final _ctrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(
+        'New Album',
+        style: AppTypography.outfit(fontSize: 18, fontWeight: FontWeight.w700),
+      ),
+      content: TextField(
+        controller: _ctrl,
+        autofocus: true,
+        textCapitalization: TextCapitalization.words,
+        decoration: const InputDecoration(hintText: 'Album name'),
+        onSubmitted: (v) => Navigator.pop(context, v.trim()),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, null),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, _ctrl.text.trim()),
+          child: const Text('Create'),
+        ),
+      ],
     );
   }
 }

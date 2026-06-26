@@ -30,7 +30,9 @@ class FaceDetectionService {
   }
 
   Future<void> close() async {
-    await _detector?.close();
+    try {
+      await _detector?.close();
+    } catch (_) {}
     _detector = null;
   }
 }
