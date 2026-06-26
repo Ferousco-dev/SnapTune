@@ -33,6 +33,8 @@ class GalleryPage extends StatelessWidget {
   }
 }
 
+enum _GroupMode { day, month, year }
+
 class _GalleryView extends StatefulWidget {
   const _GalleryView();
 
@@ -43,6 +45,7 @@ class _GalleryView extends StatefulWidget {
 class _GalleryViewState extends State<_GalleryView> {
   final _scrollController = ScrollController();
   bool _sortNewest = true;
+  _GroupMode _groupMode = _GroupMode.month;
   final Set<String> _selectedIds = {};
   final _shareButtonKey = GlobalKey();
 
@@ -219,18 +222,43 @@ class _GalleryViewState extends State<_GalleryView> {
     });
   }
 
-  Map<String, List<MediaItem>> _groupByMonth(List<MediaItem> items) {
+  Map<String, List<MediaItem>> _groupItems(List<MediaItem> items) {
     final result = <String, List<MediaItem>>{};
     for (final item in items) {
-      final key = DateFormat('MMMM yyyy').format(item.createDate);
+      final String key;
+      switch (_groupMode) {
+        case _GroupMode.day:
+          key = DateFormat('EEEE, d MMMM yyyy').format(item.createDate);
+        case _GroupMode.month:
+          key = DateFormat('MMMM yyyy').format(item.createDate);
+        case _GroupMode.year:
+          key = DateFormat('yyyy').format(item.createDate);
+      }
       result.putIfAbsent(key, () => []).add(item);
     }
     return result;
   }
 
+  void _cycleGroupMode() {
+    setState(() {
+      _groupMode = switch (_groupMode) {
+        _GroupMode.day => _GroupMode.month,
+        _GroupMode.month => _GroupMode.year,
+        _GroupMode.year => _GroupMode.day,
+      };
+    });
+    HapticFeedback.selectionClick();
+  }
+
+  String get _groupModeLabel => switch (_groupMode) {
+        _GroupMode.day => 'Day',
+        _GroupMode.month => 'Month',
+        _GroupMode.year => 'Year',
+      };
+
   List<Widget> _buildSectionSlivers(
       List<MediaItem> sorted, int crossAxisCount) {
-    final grouped = _groupByMonth(sorted);
+    final grouped = _groupItems(sorted);
     final slivers = <Widget>[];
     for (final entry in grouped.entries) {
       slivers.add(SliverToBoxAdapter(
@@ -317,6 +345,8 @@ class _GalleryViewState extends State<_GalleryView> {
                         selectedCount: _selectedIds.length,
                         onCancelSelect: _clearSelection,
                         onSelectAll: () => _selectAll(sorted),
+                        groupModeLabel: _groupModeLabel,
+                        onCycleGroup: _cycleGroupMode,
                       ),
                       if (!_isSelecting)
                         _FilterBar(activeFilter: state.activeFilter),
@@ -375,6 +405,8 @@ class _AppBar extends StatelessWidget {
   final int selectedCount;
   final VoidCallback onCancelSelect;
   final VoidCallback onSelectAll;
+  final String groupModeLabel;
+  final VoidCallback onCycleGroup;
 
   const _AppBar({
     required this.isDark,
@@ -385,6 +417,8 @@ class _AppBar extends StatelessWidget {
     required this.selectedCount,
     required this.onCancelSelect,
     required this.onSelectAll,
+    required this.groupModeLabel,
+    required this.onCycleGroup,
   });
 
   @override
@@ -441,6 +475,27 @@ class _AppBar extends StatelessWidget {
               ),
             ]
           : [
+              GestureDetector(
+                onTap: onCycleGroup,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withAlpha(isDark ? 50 : 25),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      groupModeLabel,
+                      style: AppTypography.dmSans(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
               IconButton(
                 icon: Icon(Icons.search_rounded,
                     color: Theme.of(context).colorScheme.onSurface),
