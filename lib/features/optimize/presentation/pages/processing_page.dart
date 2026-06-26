@@ -142,6 +142,18 @@ class _ProcessingPageState extends State<ProcessingPage>
       return;
     }
 
+    // Video files can't be re-encoded by the image package — pass through
+    if (item.isVideo) {
+      _setStep(3, 1.0);
+      await Future.delayed(const Duration(milliseconds: 400));
+      if (!mounted) return;
+      context.pushReplacement(
+        Routes.result,
+        extra: ResultArgs(preset: preset, item: item),
+      );
+      return;
+    }
+
     _setStep(1, 0.25);
 
     _Result result;
