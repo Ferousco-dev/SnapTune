@@ -1,8 +1,8 @@
 import 'dart:math' as math;
-import 'package:flutter/foundation.dart';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image/image.dart' as img;
 import 'package:photo_manager/photo_manager.dart';
 import '../../../../core/router/routes.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -18,68 +18,6 @@ class ProcessingPage extends StatefulWidget {
   @override
   State<ProcessingPage> createState() => _ProcessingPageState();
 }
-
-// ── Isolate-safe task / result ────────────────────────────────────────────────
-
-class _Task {
-  final Uint8List inputBytes;
-  final int maxWidth;
-  final int maxHeight;
-  final int jpegQuality;
-  const _Task({
-    required this.inputBytes,
-    required this.maxWidth,
-    required this.maxHeight,
-    required this.jpegQuality,
-  });
-}
-
-class _Result {
-  final Uint8List outputBytes;
-  final int originalSize;
-  const _Result({required this.outputBytes, required this.originalSize});
-}
-
-// Top-level so compute() can send it to a background isolate
-Future<_Result> _processImage(_Task task) async {
-  final originalSize = task.inputBytes.length;
-
-  // Telegram / lossless: skip re-encoding, just copy through
-  if (task.maxWidth == 0 && task.maxHeight == 0 && task.jpegQuality == 100) {
-    return _Result(outputBytes: task.inputBytes, originalSize: originalSize);
-  }
-
-  final decoded = img.decodeImage(task.inputBytes);
-  if (decoded == null) {
-    return _Result(outputBytes: task.inputBytes, originalSize: originalSize);
-  }
-
-  img.Image output = decoded;
-
-  // Resize to fit within target bounds (scale down only)
-  final tw = task.maxWidth > 0 ? task.maxWidth : decoded.width;
-  final th = task.maxHeight > 0 ? task.maxHeight : decoded.height;
-  final scaleX = tw / decoded.width;
-  final scaleY = th / decoded.height;
-  final scale = math.min(scaleX, scaleY);
-
-  if (scale < 1.0) {
-    output = img.copyResize(
-      decoded,
-      width: (decoded.width * scale).round(),
-      height: (decoded.height * scale).round(),
-      interpolation: img.Interpolation.linear,
-    );
-  }
-
-  final encoded = img.encodeJpg(output, quality: task.jpegQuality);
-  return _Result(
-    outputBytes: Uint8List.fromList(encoded),
-    originalSize: originalSize,
-  );
-}
-
-// ── Page ─────────────────────────────────────────────────────────────────────
 
 class _ProcessingPageState extends State<ProcessingPage>
     with TickerProviderStateMixin {
@@ -120,7 +58,7 @@ class _ProcessingPageState extends State<ProcessingPage>
 
     _setStep(0, 0.05);
 
-    // Video files can't be re-encoded by the image package — pass through
+    // Video files: pass through — flutter_image_compress handles stills only
     if (item?.isVideo == true) {
       _setStep(3, 1.0);
       await Future.delayed(const Duration(milliseconds: 400));
@@ -132,28 +70,8 @@ class _ProcessingPageState extends State<ProcessingPage>
       return;
     }
 
-    Uint8List? inputBytes;
-    if (item != null) {
-      try {
-        final asset = await AssetEntity.fromId(item.id);
-        if (asset != null) {
-          // Use thumbnailDataWithSize so iOS converts HEIC/HEIF/ProRAW to JPEG
-          // before we send bytes to the isolate — the image package only decodes JPEG/PNG.
-          // Request at the preset target size so iOS handles the resize natively.
-          final targetW = preset.maxWidth > 0 ? preset.maxWidth : asset.width;
-          final targetH = preset.maxHeight > 0 ? preset.maxHeight : asset.height;
-          inputBytes = await asset.thumbnailDataWithSize(
-            ThumbnailSize(targetW, targetH),
-            format: ThumbnailFormat.jpeg,
-            quality: 100,
-          );
-        }
-      } catch (_) {}
-    }
-
-    if (!mounted) return;
-
-    if (inputBytes == null || item == null) {
+    // No item selected: skip straight to result
+    if (item == null) {
       _setStep(3, 1.0);
       await Future.delayed(const Duration(milliseconds: 400));
       if (!mounted) return;
@@ -164,19 +82,42 @@ class _ProcessingPageState extends State<ProcessingPage>
       return;
     }
 
+    AssetEntity? asset;
+    int originalSize = 0;
+    try {
+      asset = await AssetEntity.fromId(item.id);
+      final file = await asset?.file;
+      originalSize = await file?.length() ?? 0;
+    } catch (_) {}
+
+    if (asset == null) {
+      _setStep(3, 1.0);
+      await Future.delayed(const Duration(milliseconds: 400));
+      if (!mounted) return;
+      context.pushReplacement(
+        Routes.result,
+        extra: ResultArgs(preset: preset, item: item),
+      );
+      return;
+    }
+
     _setStep(1, 0.25);
 
-    _Result result;
+    Uint8List? outputBytes;
     try {
-      result = await compute(
-        _processImage,
-        _Task(
-          inputBytes: inputBytes,
-          maxWidth: preset.maxWidth,
-          maxHeight: preset.maxHeight,
-          jpegQuality: preset.jpegQuality,
-        ),
-      );
+      final file = await asset.file;
+      if (file != null) {
+        // flutter_image_compress uses native iOS/Android APIs:
+        // handles HEIC/HEIF/ProRAW natively, hardware-accelerated, no isolate needed
+        outputBytes = await FlutterImageCompress.compressWithFile(
+          file.absolute.path,
+          minWidth: preset.maxWidth,
+          minHeight: preset.maxHeight,
+          quality: preset.jpegQuality,
+          format: CompressFormat.jpeg,
+          keepExif: false,
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _errorMsg = 'Processing failed: $e');
@@ -197,8 +138,8 @@ class _ProcessingPageState extends State<ProcessingPage>
       extra: ResultArgs(
         preset: preset,
         item: item,
-        outputBytes: result.outputBytes,
-        originalSizeBytes: result.originalSize,
+        outputBytes: outputBytes,
+        originalSizeBytes: originalSize,
       ),
     );
   }
