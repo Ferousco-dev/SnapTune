@@ -1,7 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:photo_manager/photo_manager.dart';
+import 'package:video_player/video_player.dart';
 import '../../../../core/router/routes.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
@@ -62,10 +64,13 @@ class _ViewerPageState extends State<ViewerPage> {
 
   void _showOptions(MediaItem item) {
     HapticFeedback.selectionClick();
+    // Pass page-level context so the details sub-sheet can be shown
+    // after the first sheet is dismissed without using a deactivated context.
+    final pageCtx = context;
     showModalBottomSheet(
-      context: context,
+      context: pageCtx,
       backgroundColor: Colors.transparent,
-      builder: (_) => _ViewerOptionsSheet(item: item),
+      builder: (_) => _ViewerOptionsSheet(item: item, pageContext: pageCtx),
     );
   }
 
@@ -85,7 +90,12 @@ class _ViewerPageState extends State<ViewerPage> {
               controller: _pageController,
               itemCount: _items.length,
               onPageChanged: (i) => setState(() => _currentIndex = i),
-              itemBuilder: (_, i) => _PhotoViewer(item: _items[i]),
+              itemBuilder: (_, i) {
+                final item = _items[i];
+                return item.isVideo
+                    ? _VideoViewer(item: item)
+                    : _PhotoViewer(item: item);
+              },
             ),
           ),
 
@@ -122,7 +132,7 @@ class _ViewerPageState extends State<ViewerPage> {
   }
 }
 
-// ── Photo viewer ─────────────────────────────────────────────────────────────
+// ── Photo viewer ──────────────────────────────────────────────────────────────
 
 class _PhotoViewer extends StatefulWidget {
   final MediaItem item;
@@ -145,12 +155,10 @@ class _PhotoViewerState extends State<_PhotoViewer> {
   Future<void> _load() async {
     final asset = await AssetEntity.fromId(widget.item.id);
     if (asset == null || !mounted) return;
-
     final bytes = await asset.thumbnailDataWithSize(
       const ThumbnailSize(1080, 1920),
       quality: 95,
     );
-
     if (!mounted) return;
     setState(() {
       _bytes = bytes;
@@ -170,14 +178,172 @@ class _PhotoViewerState extends State<_PhotoViewer> {
         ),
       );
     }
-
     if (_bytes == null) {
       return const Center(
         child: Icon(Icons.broken_image_rounded,
             color: Colors.white30, size: 48),
       );
     }
+    return InteractiveViewer(
+      minScale: 1.0,
+      maxScale: 4.0,
+      child: Center(
+        child: Image.memory(_bytes!, fit: BoxFit.contain, gaplessPlayback: true),
+      ),
+    );
+  }
+}
 
+// ── Video viewer ──────────────────────────────────────────────────────────────
+
+class _VideoViewer extends StatefulWidget {
+  final MediaItem item;
+  const _VideoViewer({required this.item});
+
+  @override
+  State<_VideoViewer> createState() => _VideoViewerState();
+}
+
+class _VideoViewerState extends State<_VideoViewer> {
+  Uint8List? _thumbnail;
+  VideoPlayerController? _controller;
+  bool _loadingThumb = true;
+  bool _loadingVideo = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadThumbnail();
+  }
+
+  Future<void> _loadThumbnail() async {
+    final asset = await AssetEntity.fromId(widget.item.id);
+    if (asset == null || !mounted) return;
+    final bytes = await asset.thumbnailDataWithSize(
+      const ThumbnailSize(1080, 1920),
+      quality: 90,
+    );
+    if (!mounted) return;
+    setState(() {
+      _thumbnail = bytes;
+      _loadingThumb = false;
+    });
+  }
+
+  Future<void> _initAndPlay() async {
+    if (_controller != null || _loadingVideo) return;
+    setState(() => _loadingVideo = true);
+    try {
+      final asset = await AssetEntity.fromId(widget.item.id);
+      final file = await asset?.file;
+      if (file == null || !mounted) return;
+      final ctrl = VideoPlayerController.file(file);
+      await ctrl.initialize();
+      if (!mounted) {
+        ctrl.dispose();
+        return;
+      }
+      ctrl.addListener(() {
+        if (mounted) setState(() {});
+      });
+      setState(() {
+        _controller = ctrl;
+        _loadingVideo = false;
+      });
+      ctrl.play();
+    } catch (_) {
+      if (mounted) setState(() => _loadingVideo = false);
+    }
+  }
+
+  void _togglePlayPause() {
+    final ctrl = _controller;
+    if (ctrl == null) return;
+    if (ctrl.value.isPlaying) {
+      ctrl.pause();
+    } else {
+      ctrl.play();
+    }
+    setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ctrl = _controller;
+
+    if (ctrl != null && ctrl.value.isInitialized) {
+      return GestureDetector(
+        onTap: _togglePlayPause,
+        behavior: HitTestBehavior.opaque,
+        child: Center(
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              AspectRatio(
+                aspectRatio: ctrl.value.aspectRatio,
+                child: VideoPlayer(ctrl),
+              ),
+
+              // Play/pause overlay
+              if (!ctrl.value.isPlaying)
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withAlpha(150),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                        color: Colors.white38, width: 1.5),
+                  ),
+                  child: const Icon(Icons.play_arrow_rounded,
+                      color: Colors.white, size: 40),
+                ),
+
+              // Progress bar
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: VideoProgressIndicator(
+                  ctrl,
+                  allowScrubbing: true,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 0, vertical: 4),
+                  colors: const VideoProgressColors(
+                    playedColor: AppColors.primary,
+                    bufferedColor: Colors.white24,
+                    backgroundColor: Colors.white12,
+                  ),
+                ),
+              ),
+
+              // Duration label
+              Positioned(
+                bottom: 16,
+                right: 12,
+                child: Text(
+                  _formatDuration(
+                      ctrl.value.position, ctrl.value.duration),
+                  style: AppTypography.dmSans(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Thumbnail + play button (before video is loaded)
     return InteractiveViewer(
       minScale: 1.0,
       maxScale: 4.0,
@@ -185,26 +351,52 @@ class _PhotoViewerState extends State<_PhotoViewer> {
         child: Stack(
           alignment: Alignment.center,
           children: [
-            Image.memory(_bytes!, fit: BoxFit.contain, gaplessPlayback: true),
-            if (widget.item.isVideo)
-              Container(
-                width: 64,
-                height: 64,
-                decoration: const BoxDecoration(
-                  color: Colors.black54,
+            if (!_loadingThumb && _thumbnail != null)
+              Image.memory(_thumbnail!, fit: BoxFit.contain,
+                  gaplessPlayback: true)
+            else
+              Container(color: Colors.black),
+
+            GestureDetector(
+              onTap: _initAndPlay,
+              child: Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: Colors.black.withAlpha(150),
                   shape: BoxShape.circle,
+                  border:
+                      Border.all(color: Colors.white38, width: 1.5),
                 ),
-                child: const Icon(Icons.play_arrow_rounded,
-                    color: Colors.white, size: 36),
+                child: _loadingVideo
+                    ? const Center(
+                        child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        ),
+                      )
+                    : const Icon(Icons.play_arrow_rounded,
+                        color: Colors.white, size: 40),
               ),
+            ),
           ],
         ),
       ),
     );
   }
+
+  String _formatDuration(Duration pos, Duration total) {
+    String fmt(Duration d) =>
+        '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
+    return '${fmt(pos)} / ${fmt(total)}';
+  }
 }
 
-// ── Top bar ──────────────────────────────────────────────────────────────────
+// ── Top bar ───────────────────────────────────────────────────────────────────
 
 class _TopBar extends StatelessWidget {
   final int currentIndex;
@@ -224,7 +416,8 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(gradient: AppColors.viewerTopGradient),
+      decoration:
+          const BoxDecoration(gradient: AppColors.viewerTopGradient),
       padding: EdgeInsets.only(
         top: MediaQuery.of(context).padding.top + 4,
         left: 4,
@@ -249,7 +442,6 @@ class _TopBar extends StatelessWidget {
               ),
             ),
           ),
-          // Like button with animated icon swap
           GestureDetector(
             onTap: onLikeTap,
             behavior: HitTestBehavior.opaque,
@@ -260,11 +452,10 @@ class _TopBar extends StatelessWidget {
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 250),
                   transitionBuilder: (child, animation) => ScaleTransition(
-                    scale: Tween<double>(begin: 0.6, end: 1.0)
-                        .animate(CurvedAnimation(
-                      parent: animation,
-                      curve: Curves.elasticOut,
-                    )),
+                    scale: Tween<double>(begin: 0.6, end: 1.0).animate(
+                      CurvedAnimation(
+                          parent: animation, curve: Curves.elasticOut),
+                    ),
                     child: child,
                   ),
                   child: Icon(
@@ -286,7 +477,8 @@ class _TopBar extends StatelessWidget {
             child: const SizedBox(
               width: 40,
               height: 40,
-              child: Icon(Icons.more_vert_rounded, color: Colors.white, size: 22),
+              child: Icon(Icons.more_vert_rounded,
+                  color: Colors.white, size: 22),
             ),
           ),
         ],
@@ -295,7 +487,7 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-// ── Bottom bar ───────────────────────────────────────────────────────────────
+// ── Bottom bar ────────────────────────────────────────────────────────────────
 
 class _BottomBar extends StatelessWidget {
   final MediaItem item;
@@ -304,7 +496,8 @@ class _BottomBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(gradient: AppColors.viewerBottomGradient),
+      decoration:
+          const BoxDecoration(gradient: AppColors.viewerBottomGradient),
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).padding.bottom + 20,
         left: AppSpacing.lg,
@@ -318,7 +511,9 @@ class _BottomBar extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
-                item.isVideo ? Icons.videocam_rounded : Icons.photo_rounded,
+                item.isVideo
+                    ? Icons.videocam_rounded
+                    : Icons.photo_rounded,
                 color: Colors.white60,
                 size: 13,
               ),
@@ -388,7 +583,13 @@ class _BottomBar extends StatelessWidget {
 
 class _ViewerOptionsSheet extends StatelessWidget {
   final MediaItem item;
-  const _ViewerOptionsSheet({required this.item});
+  // Page-level context - stays valid after this sheet is dismissed
+  final BuildContext pageContext;
+
+  const _ViewerOptionsSheet({
+    required this.item,
+    required this.pageContext,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -404,21 +605,21 @@ class _ViewerOptionsSheet extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Handle
           const SizedBox(height: 10),
           Container(
             width: 36,
             height: 4,
             decoration: BoxDecoration(
-              color: isDark ? AppColors.darkOutline : AppColors.outlineVariant,
+              color:
+                  isDark ? AppColors.darkOutline : AppColors.outlineVariant,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
           const SizedBox(height: 16),
 
-          // Info card
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+            padding:
+                const EdgeInsets.symmetric(horizontal: AppSpacing.md),
             child: _InfoRow(item: item, isDark: isDark),
           ),
 
@@ -430,8 +631,14 @@ class _ViewerOptionsSheet extends StatelessWidget {
             label: 'Details',
             isDark: isDark,
             onTap: () {
+              // Pop this sheet first using its own context (still valid here)
               Navigator.pop(context);
-              _showDetails(context, item);
+              // Then show details sheet using the page context (never deactivated)
+              showModalBottomSheet(
+                context: pageContext,
+                backgroundColor: Colors.transparent,
+                builder: (_) => _DetailsSheet(item: item),
+              );
             },
           ),
           _SheetOption(
@@ -456,7 +663,7 @@ class _ViewerOptionsSheet extends StatelessWidget {
             isDestructive: true,
             onTap: () {
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
+              ScaffoldMessenger.of(pageContext).showSnackBar(
                 const SnackBar(
                   content: Text('Delete coming soon'),
                   behavior: SnackBarBehavior.floating,
@@ -470,84 +677,51 @@ class _ViewerOptionsSheet extends StatelessWidget {
       ),
     );
   }
+}
 
-  void _showDetails(BuildContext context, MediaItem item) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.darkSurface : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 20),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? AppColors.darkOutline
-                      : AppColors.outlineVariant,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            Text(
-              'Details',
-              style: AppTypography.outfit(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
-            ),
-            const SizedBox(height: 20),
-            _DetailRow(
-              icon: item.isVideo
-                  ? Icons.videocam_rounded
-                  : Icons.photo_rounded,
-              label: 'Type',
-              value: item.isVideo ? 'Video' : 'Photo',
-              isDark: isDark,
-            ),
-            _DetailRow(
-              icon: Icons.calendar_today_rounded,
-              label: 'Date',
-              value: _formatDate(item.createDate),
-              isDark: isDark,
-            ),
-            if (item.width > 0 && item.height > 0)
-              _DetailRow(
-                icon: Icons.aspect_ratio_rounded,
-                label: 'Dimensions',
-                value: '${item.width} x ${item.height}',
-                isDark: isDark,
-              ),
-            if (item.isVideo && item.duration > 0)
-              _DetailRow(
-                icon: Icons.timer_outlined,
-                label: 'Duration',
-                value: _formatDuration(item.duration),
-                isDark: isDark,
-              ),
-            SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
-          ],
-        ),
-      ),
-    );
+// ── Details sheet ─────────────────────────────────────────────────────────────
+
+class _DetailsSheet extends StatefulWidget {
+  final MediaItem item;
+  const _DetailsSheet({required this.item});
+
+  @override
+  State<_DetailsSheet> createState() => _DetailsSheetState();
+}
+
+class _DetailsSheetState extends State<_DetailsSheet> {
+  int? _fileSizeBytes;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSize();
+  }
+
+  Future<void> _loadSize() async {
+    try {
+      final asset = await AssetEntity.fromId(widget.item.id);
+      final file = await asset?.file;
+      if (file == null || !mounted) return;
+      final size = await File(file.path).length();
+      if (!mounted) return;
+      setState(() => _fileSizeBytes = size);
+    } catch (_) {}
+  }
+
+  String _formatSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) {
+      return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    }
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
   }
 
   String _formatDate(DateTime dt) {
     const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
+      'January', 'February', 'March', 'April',
+      'May', 'June', 'July', 'August',
+      'September', 'October', 'November', 'December',
     ];
     return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
   }
@@ -557,7 +731,89 @@ class _ViewerOptionsSheet extends StatelessWidget {
     final s = seconds % 60;
     return '$m:${s.toString().padLeft(2, '0')}';
   }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final item = widget.item;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurface : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color:
+                    isDark ? AppColors.darkOutline : AppColors.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Text(
+            'Details',
+            style: AppTypography.outfit(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 20),
+          _DetailRow(
+            icon: item.isVideo
+                ? Icons.videocam_rounded
+                : Icons.photo_rounded,
+            label: 'Type',
+            value: item.isVideo ? 'Video' : 'Photo',
+            isDark: isDark,
+          ),
+          _DetailRow(
+            icon: Icons.calendar_today_rounded,
+            label: 'Date',
+            value: _formatDate(item.createDate),
+            isDark: isDark,
+          ),
+          if (item.width > 0 && item.height > 0)
+            _DetailRow(
+              icon: Icons.aspect_ratio_rounded,
+              label: 'Dimensions',
+              value: '${item.width} x ${item.height}',
+              isDark: isDark,
+            ),
+          if (item.isVideo && item.duration > 0)
+            _DetailRow(
+              icon: Icons.timer_outlined,
+              label: 'Duration',
+              value: _formatDuration(item.duration),
+              isDark: isDark,
+            ),
+          _DetailRow(
+            icon: Icons.storage_rounded,
+            label: 'File size',
+            value: _fileSizeBytes != null
+                ? _formatSize(_fileSizeBytes!)
+                : '...',
+            isDark: isDark,
+            isLoading: _fileSizeBytes == null,
+          ),
+          SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
+        ],
+      ),
+    );
+  }
 }
+
+// ── Shared sheet widgets ──────────────────────────────────────────────────────
 
 class _InfoRow extends StatelessWidget {
   final MediaItem item;
@@ -572,7 +828,9 @@ class _InfoRow extends StatelessWidget {
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-            color: isDark ? AppColors.darkSurfaceVariant : AppColors.surfaceVariant,
+            color: isDark
+                ? AppColors.darkSurfaceVariant
+                : AppColors.surfaceVariant,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(
@@ -621,12 +879,14 @@ class _DetailRow extends StatelessWidget {
   final String label;
   final String value;
   final bool isDark;
+  final bool isLoading;
 
   const _DetailRow({
     required this.icon,
     required this.label,
     required this.value,
     required this.isDark,
+    this.isLoading = false,
   });
 
   @override
@@ -647,14 +907,24 @@ class _DetailRow extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          Text(
-            value,
-            style: AppTypography.dmSans(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: Theme.of(context).colorScheme.onSurface,
+          if (isLoading)
+            SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.5,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            )
+          else
+            Text(
+              value,
+              style: AppTypography.dmSans(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
             ),
-          ),
         ],
       ),
     );
