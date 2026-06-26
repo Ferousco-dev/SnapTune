@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:photo_manager/photo_manager.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:video_player/video_player.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../../core/router/routes.dart';
@@ -35,6 +36,10 @@ class _ViewerPageState extends State<ViewerPage> {
   bool _overlaysVisible = true;
   bool _photoZoomed = false;
 
+  // Swipe-down-to-dismiss state
+  double _dragOffset = 0.0;
+  bool _dragging = false;
+
   @override
   void initState() {
     super.initState();
@@ -65,8 +70,6 @@ class _ViewerPageState extends State<ViewerPage> {
 
   void _showOptions(MediaItem item) {
     HapticFeedback.selectionClick();
-    // Pass page-level context so the details sub-sheet can be shown
-    // after the first sheet is dismissed without using a deactivated context.
     final pageCtx = context;
     showModalBottomSheet(
       context: pageCtx,
@@ -75,73 +78,109 @@ class _ViewerPageState extends State<ViewerPage> {
     );
   }
 
+  void _onDragStart(DragStartDetails _) {
+    if (_photoZoomed) return;
+    _dragging = true;
+  }
+
+  void _onDragUpdate(DragUpdateDetails details) {
+    if (!_dragging) return;
+    setState(() => _dragOffset += details.delta.dy);
+  }
+
+  void _onDragEnd(DragEndDetails details) {
+    if (!_dragging) return;
+    _dragging = false;
+    final velocity = details.primaryVelocity ?? 0;
+    if (_dragOffset > 120 || velocity > 800) {
+      context.pop();
+    } else {
+      setState(() => _dragOffset = 0);
+    }
+  }
+
   List<MediaItem> get _items => widget.args.items;
 
   @override
   Widget build(BuildContext context) {
     final currentItem = _items[_currentIndex];
+    final dragProgress = (_dragOffset.abs() / 300).clamp(0.0, 1.0);
+    final dismissOpacity = 1.0 - dragProgress;
+
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          GestureDetector(
-            onTap: _toggleOverlays,
-            behavior: HitTestBehavior.opaque,
-            child: PageView.builder(
-              controller: _pageController,
-              // Lock horizontal swipe while a photo is zoomed in
-              physics: _photoZoomed
-                  ? const NeverScrollableScrollPhysics()
-                  : null,
-              itemCount: _items.length,
-              onPageChanged: (i) => setState(() {
-                _currentIndex = i;
-                _photoZoomed = false;
-              }),
-              itemBuilder: (_, i) {
-                final item = _items[i];
-                return item.isVideo
-                    ? _VideoViewer(item: item)
-                    : _PhotoViewer(
-                        item: item,
-                        onZoomChanged: (zoomed) {
-                          if (_photoZoomed != zoomed) {
-                            setState(() => _photoZoomed = zoomed);
-                          }
-                        },
-                      );
-              },
-            ),
-          ),
+      body: GestureDetector(
+        onVerticalDragStart: _onDragStart,
+        onVerticalDragUpdate: _onDragUpdate,
+        onVerticalDragEnd: _onDragEnd,
+        behavior: HitTestBehavior.translucent,
+        child: Transform.translate(
+          offset: Offset(0, _dragOffset),
+          child: Opacity(
+            opacity: dismissOpacity.clamp(0.0, 1.0),
+            child: Stack(
+              children: [
+                GestureDetector(
+                  onTap: _toggleOverlays,
+                  behavior: HitTestBehavior.opaque,
+                  child: PageView.builder(
+                    controller: _pageController,
+                    physics: _photoZoomed
+                        ? const NeverScrollableScrollPhysics()
+                        : null,
+                    itemCount: _items.length,
+                    onPageChanged: (i) => setState(() {
+                      _currentIndex = i;
+                      _photoZoomed = false;
+                    }),
+                    itemBuilder: (_, i) {
+                      final item = _items[i];
+                      return item.isVideo
+                          ? _VideoViewer(item: item)
+                          : _PhotoViewer(
+                              item: item,
+                              onZoomChanged: (zoomed) {
+                                if (_photoZoomed != zoomed) {
+                                  setState(() => _photoZoomed = zoomed);
+                                }
+                              },
+                            );
+                    },
+                  ),
+                ),
 
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: AnimatedOpacity(
-              opacity: _overlaysVisible ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 220),
-              child: _TopBar(
-                currentIndex: _currentIndex,
-                total: _items.length,
-                isLiked: sl<LikedIdsNotifier>().isLiked(currentItem.id),
-                onLikeTap: () => _toggleLike(currentItem.id),
-                onMoreTap: () => _showOptions(currentItem),
-              ),
-            ),
-          ),
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: AnimatedOpacity(
+                    opacity: _overlaysVisible ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 220),
+                    child: _TopBar(
+                      currentIndex: _currentIndex,
+                      total: _items.length,
+                      isLiked:
+                          sl<LikedIdsNotifier>().isLiked(currentItem.id),
+                      onLikeTap: () => _toggleLike(currentItem.id),
+                      onMoreTap: () => _showOptions(currentItem),
+                    ),
+                  ),
+                ),
 
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: AnimatedOpacity(
-              opacity: _overlaysVisible ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 220),
-              child: _BottomBar(item: currentItem),
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: AnimatedOpacity(
+                    opacity: _overlaysVisible ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 220),
+                    child: _BottomBar(item: currentItem),
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -268,6 +307,8 @@ class _VideoViewerState extends State<_VideoViewer> {
   VideoPlayerController? _controller;
   bool _loadingThumb = true;
   bool _loadingVideo = false;
+  double _volume = 1.0;
+  bool _showVolume = false;
 
   @override
   void initState() {
@@ -325,6 +366,15 @@ class _VideoViewerState extends State<_VideoViewer> {
     }
     setState(() {});
   }
+
+  void _setVolume(double v) {
+    _volume = v;
+    _controller?.setVolume(v);
+    setState(() {});
+  }
+
+  void _toggleVolumeSlider() =>
+      setState(() => _showVolume = !_showVolume);
 
   @override
   void dispose() {
@@ -385,7 +435,7 @@ class _VideoViewerState extends State<_VideoViewer> {
               // Duration label
               Positioned(
                 bottom: 16,
-                right: 12,
+                right: 48,
                 child: Text(
                   _formatDuration(
                       ctrl.value.position, ctrl.value.duration),
@@ -396,6 +446,41 @@ class _VideoViewerState extends State<_VideoViewer> {
                   ),
                 ),
               ),
+
+              // Volume toggle button
+              Positioned(
+                bottom: 8,
+                right: 8,
+                child: GestureDetector(
+                  onTap: _toggleVolumeSlider,
+                  child: Icon(
+                    _volume == 0
+                        ? Icons.volume_off_rounded
+                        : Icons.volume_up_rounded,
+                    color: Colors.white70,
+                    size: 20,
+                  ),
+                ),
+              ),
+
+              // Volume slider (shown on demand)
+              if (_showVolume)
+                Positioned(
+                  bottom: 36,
+                  right: 0,
+                  child: SizedBox(
+                    height: 140,
+                    child: RotatedBox(
+                      quarterTurns: 3,
+                      child: Slider(
+                        value: _volume,
+                        onChanged: _setVolume,
+                        activeColor: Colors.white,
+                        inactiveColor: Colors.white30,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -704,13 +789,15 @@ class _ViewerOptionsSheet extends StatelessWidget {
             icon: Icons.share_rounded,
             label: 'Share original',
             isDark: isDark,
-            onTap: () => Navigator.pop(context),
-          ),
-          _SheetOption(
-            icon: Icons.copy_rounded,
-            label: 'Copy to album',
-            isDark: isDark,
-            onTap: () => Navigator.pop(context),
+            onTap: () async {
+              Navigator.pop(context);
+              try {
+                final asset = await AssetEntity.fromId(item.id);
+                final file = await asset?.file;
+                if (file == null) return;
+                await Share.shareXFiles([XFile(file.path)]);
+              } catch (_) {}
+            },
           ),
 
           _Divider(isDark: isDark),
@@ -750,21 +837,32 @@ class _DetailsSheet extends StatefulWidget {
 
 class _DetailsSheetState extends State<_DetailsSheet> {
   int? _fileSizeBytes;
+  double? _latitude;
+  double? _longitude;
 
   @override
   void initState() {
     super.initState();
-    _loadSize();
+    _loadDetails();
   }
 
-  Future<void> _loadSize() async {
+  Future<void> _loadDetails() async {
     try {
       final asset = await AssetEntity.fromId(widget.item.id);
-      final file = await asset?.file;
-      if (file == null || !mounted) return;
-      final size = await File(file.path).length();
-      if (!mounted) return;
-      setState(() => _fileSizeBytes = size);
+      if (asset == null || !mounted) return;
+      final file = await asset.file;
+      if (file != null && mounted) {
+        final size = await File(file.path).length();
+        if (mounted) setState(() => _fileSizeBytes = size);
+      }
+      final lat = asset.latitude;
+      final lng = asset.longitude;
+      if (lat != null && lng != null && lat != 0.0 && lng != 0.0 && mounted) {
+        setState(() {
+          _latitude = lat;
+          _longitude = lng;
+        });
+      }
     } catch (_) {}
   }
 
@@ -865,6 +963,14 @@ class _DetailsSheetState extends State<_DetailsSheet> {
             isDark: isDark,
             isLoading: _fileSizeBytes == null,
           ),
+          if (_latitude != null && _longitude != null)
+            _DetailRow(
+              icon: Icons.location_on_rounded,
+              label: 'Location',
+              value:
+                  '${_latitude!.toStringAsFixed(4)}, ${_longitude!.toStringAsFixed(4)}',
+              isDark: isDark,
+            ),
           SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
         ],
       ),
