@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:photo_manager/photo_manager.dart';
+import '../../../../core/router/routes.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../gallery/domain/entities/media_item.dart';
+import '../../../optimize/presentation/pages/optimize_page.dart'
+    show ProcessingArgs;
+import '../../../optimize/domain/entities/platform_preset.dart';
 
 class ViewerArgs {
   final List<MediaItem> items;
@@ -252,7 +256,13 @@ class _BottomBar extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           GestureDetector(
-            onTap: () {},
+            onTap: () => context.push(
+              Routes.processing,
+              extra: ProcessingArgs(
+                item: item,
+                preset: PlatformPreset.all.first,
+              ),
+            ),
             child: Container(
               height: 52,
               decoration: BoxDecoration(
