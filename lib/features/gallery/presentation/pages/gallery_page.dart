@@ -3,10 +3,15 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
+import 'package:photo_manager/photo_manager.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../../core/router/routes.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../viewer/presentation/pages/viewer_page.dart';
+import '../../../optimize/presentation/pages/optimize_page.dart'
+    show ProcessingArgs;
+import '../../../optimize/domain/entities/platform_preset.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../domain/entities/media_item.dart';
@@ -38,6 +43,7 @@ class _GalleryViewState extends State<_GalleryView> {
   final _scrollController = ScrollController();
   bool _sortNewest = true;
   final Set<String> _selectedIds = {};
+  final _shareButtonKey = GlobalKey();
 
   bool get _isSelecting => _selectedIds.isNotEmpty;
 
@@ -85,6 +91,66 @@ class _GalleryViewState extends State<_GalleryView> {
   }
 
   void _clearSelection() => setState(() => _selectedIds.clear());
+
+  Future<void> _shareSelected(List<MediaItem> sorted) async {
+    if (_selectedIds.isEmpty) return;
+    final items =
+        sorted.where((i) => _selectedIds.contains(i.id)).toList();
+
+    final files = <XFile>[];
+    for (final item in items) {
+      final asset = await AssetEntity.fromId(item.id);
+      final file = await asset?.file;
+      if (file != null) files.add(XFile(file.path));
+    }
+    if (files.isEmpty || !mounted) return;
+
+    final box = _shareButtonKey.currentContext?.findRenderObject()
+        as RenderBox?;
+    final origin = box != null
+        ? box.localToGlobal(Offset.zero) & box.size
+        : const Rect.fromLTWH(0, 600, 100, 50);
+
+    await Share.shareXFiles(files, sharePositionOrigin: origin);
+  }
+
+  Future<void> _confirmDelete() async {
+    final count = _selectedIds.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => _DeleteConfirmDialog(count: count),
+    );
+    if (confirmed != true || !mounted) return;
+
+    await PhotoManager.editor.deleteWithIds(_selectedIds.toList());
+    if (!mounted) return;
+    setState(() => _selectedIds.clear());
+    context.read<GalleryBloc>().add(const GalleryRefreshed());
+  }
+
+  void _optimizeSelected(List<MediaItem> sorted) {
+    if (_selectedIds.isEmpty) return;
+    final items =
+        sorted.where((i) => _selectedIds.contains(i.id)).toList();
+    _clearSelection();
+
+    if (items.length > 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Optimizing first of ${items.length} selected items'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+
+    context.push(
+      Routes.processing,
+      extra: ProcessingArgs(
+        item: items.first,
+        preset: PlatformPreset.all.first,
+      ),
+    );
+  }
 
   void _selectAll(List<MediaItem> items) {
     HapticFeedback.lightImpact();
@@ -204,14 +270,10 @@ class _GalleryViewState extends State<_GalleryView> {
                   right: 0,
                   child: _SelectionBar(
                     count: _selectedIds.length,
-                    onShare: () {},
-                    onOptimize: () {},
-                    onDelete: () => ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Delete coming soon'),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    ),
+                    shareButtonKey: _shareButtonKey,
+                    onShare: () => _shareSelected(sorted),
+                    onOptimize: () => _optimizeSelected(sorted),
+                    onDelete: _confirmDelete,
                   ),
                 ),
             ],
@@ -847,6 +909,7 @@ class _MonthSection extends StatelessWidget {
 
 class _SelectionBar extends StatelessWidget {
   final int count;
+  final Key? shareButtonKey;
   final VoidCallback onShare;
   final VoidCallback onOptimize;
   final VoidCallback onDelete;
@@ -856,6 +919,7 @@ class _SelectionBar extends StatelessWidget {
     required this.onShare,
     required this.onOptimize,
     required this.onDelete,
+    this.shareButtonKey,
   });
 
   @override
@@ -888,6 +952,7 @@ class _SelectionBar extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _SelectionAction(
+            actionKey: shareButtonKey,
             icon: Icons.share_rounded,
             label: 'Share',
             onTap: onShare,
@@ -911,6 +976,7 @@ class _SelectionBar extends StatelessWidget {
 }
 
 class _SelectionAction extends StatelessWidget {
+  final Key? actionKey;
   final IconData icon;
   final String label;
   final Color? color;
@@ -920,6 +986,7 @@ class _SelectionAction extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onTap,
+    this.actionKey,
     this.color,
   });
 
@@ -927,6 +994,7 @@ class _SelectionAction extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = color ?? Theme.of(context).colorScheme.onSurface;
     return GestureDetector(
+      key: actionKey,
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Padding(
@@ -943,6 +1011,119 @@ class _SelectionAction extends StatelessWidget {
                 fontWeight: FontWeight.w500,
                 color: c,
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Delete confirmation dialog ────────────────────────────────────────────────
+
+class _DeleteConfirmDialog extends StatelessWidget {
+  final int count;
+  const _DeleteConfirmDialog({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final itemLabel = count == 1 ? '1 item' : '$count items';
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.darkSurface : Colors.white,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                color: AppColors.error.withAlpha(isDark ? 35 : 20),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.delete_rounded,
+                  color: AppColors.error, size: 30),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Delete $itemLabel?',
+              style: AppTypography.outfit(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              count == 1
+                  ? 'This item will be permanently removed from your library. This cannot be undone.'
+                  : 'These $count items will be permanently removed from your library. This cannot be undone.',
+              style: AppTypography.dmSans(
+                fontSize: 13,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(context, false),
+                    child: Container(
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? AppColors.darkSurfaceVariant
+                            : AppColors.surfaceVariant,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Center(
+                        child: Text(
+                          'Cancel',
+                          style: AppTypography.dmSans(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(context, true),
+                    child: Container(
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: AppColors.error,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Center(
+                        child: Text(
+                          'Delete',
+                          style: AppTypography.dmSans(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
