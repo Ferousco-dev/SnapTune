@@ -4,10 +4,13 @@ import '../../features/splash/presentation/pages/splash_page.dart';
 import '../../features/onboarding/presentation/pages/onboarding_page.dart';
 import '../../features/gallery/presentation/pages/gallery_page.dart';
 import '../../features/albums/presentation/pages/albums_page.dart';
-import '../../features/optimize/presentation/pages/optimize_page.dart';
+import '../../features/optimize/presentation/pages/optimize_page.dart'
+    show OptimizePage, OptimizeArgs, ProcessingArgs;
 import '../../features/favorites/presentation/pages/favorites_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
 import '../../features/viewer/presentation/pages/viewer_page.dart';
+import '../../features/optimize/presentation/pages/processing_page.dart';
+import '../../features/optimize/presentation/pages/result_page.dart';
 import '../../shared/widgets/app_shell.dart';
 import 'routes.dart';
 
@@ -30,6 +33,20 @@ final GoRouter appRouter = GoRouter(
         return _fade(state, ViewerPage(args: args));
       },
     ),
+    GoRoute(
+      path: Routes.processing,
+      pageBuilder: (_, state) {
+        final args = state.extra as ProcessingArgs?;
+        return _fade(state, ProcessingPage(args: args));
+      },
+    ),
+    GoRoute(
+      path: Routes.result,
+      pageBuilder: (_, state) {
+        final args = state.extra as ResultArgs?;
+        return _fade(state, ResultPage(args: args));
+      },
+    ),
     ShellRoute(
       builder: (_, _, child) => AppShell(child: child),
       routes: [
@@ -43,7 +60,10 @@ final GoRouter appRouter = GoRouter(
         ),
         GoRoute(
           path: Routes.optimize,
-          pageBuilder: (_, state) => _noTransition(state, const OptimizePage()),
+          pageBuilder: (_, state) {
+            final args = state.extra as OptimizeArgs?;
+            return _noTransition(state, OptimizePage(args: args));
+          },
         ),
         GoRoute(
           path: Routes.favorites,
