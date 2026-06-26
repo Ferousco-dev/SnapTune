@@ -1,218 +1,87 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../../core/services/grid_columns_notifier.dart';
 import '../../../../core/services/theme_notifier.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/constants/app_spacing.dart';
+import '../../../optimize/domain/entities/platform_preset.dart';
 
-class SettingsPage extends StatelessWidget {
+class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final theme = Theme.of(context);
-    final currentMode = sl<ThemeNotifier>().mode;
+  State<SettingsPage> createState() => _SettingsPageState();
+}
 
-    final appearanceSubtitle = switch (currentMode) {
-      ThemeMode.light => 'Light',
-      ThemeMode.dark => 'Dark',
-      _ => 'Follow system',
-    };
-    final gridColumns = sl<GridColumnsNotifier>().value;
+class _SettingsPageState extends State<SettingsPage> {
+  String _defaultPlatformId = 'whatsappStatus';
+  String _qualityMode = 'Balanced';
 
-    return ValueListenableBuilder<int>(
-      valueListenable: sl<GridColumnsNotifier>(),
-      builder: (context, cols, _) => Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        backgroundColor: theme.scaffoldBackgroundColor,
-        automaticallyImplyLeading: false,
-        title: Text(
-          'Settings',
-          style: AppTypography.outfit(
-            fontSize: 26,
-            fontWeight: FontWeight.w700,
-            color: theme.colorScheme.onSurface,
-            letterSpacing: -0.3,
-          ),
-        ),
+  @override
+  void initState() {
+    super.initState();
+    _loadPrefs();
+  }
+
+  Future<void> _loadPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _defaultPlatformId =
+          prefs.getString('default_platform') ?? 'whatsappStatus';
+      _qualityMode = prefs.getString('quality_mode') ?? 'Balanced';
+    });
+  }
+
+  Future<void> _setDefaultPlatform(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('default_platform', id);
+    if (mounted) setState(() => _defaultPlatformId = id);
+  }
+
+  Future<void> _setQualityMode(String mode) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('quality_mode', mode);
+    if (mounted) setState(() => _qualityMode = mode);
+  }
+
+  String get _defaultPlatformName => PlatformPreset.all
+      .firstWhere(
+        (p) => p.id.name == _defaultPlatformId,
+        orElse: () => PlatformPreset.all.first,
+      )
+      .name;
+
+  void _showPlatformSheet(BuildContext context, bool isDark) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _PlatformSheet(
+        isDark: isDark,
+        currentId: _defaultPlatformId,
+        onPick: (id) {
+          _setDefaultPlatform(id);
+          Navigator.pop(context);
+        },
       ),
-      body: ListView(
-        padding: EdgeInsets.fromLTRB(
-          AppSpacing.md,
-          AppSpacing.xs,
-          AppSpacing.md,
-          MediaQuery.of(context).padding.bottom + AppSpacing.lg,
-        ),
-        children: [
-          _AppCard(isDark: isDark),
-          const SizedBox(height: AppSpacing.lg),
-
-          _SectionLabel('Preferences'),
-          _SettingsCard(
-            isDark: isDark,
-            children: [
-              _SettingsTile(
-                isDark: isDark,
-                icon: Icons.palette_outlined,
-                iconColor: AppColors.violet,
-                title: 'Appearance',
-                subtitle: appearanceSubtitle,
-                trailing: const Icon(
-                  Icons.chevron_right_rounded,
-                  size: 20,
-                  color: AppColors.muted,
-                ),
-                onTap: () => _showAppearanceSheet(context, isDark),
-              ),
-              _TileDivider(isDark: isDark),
-              _SettingsTile(
-                isDark: isDark,
-                icon: Icons.grid_view_rounded,
-                iconColor: AppColors.primary,
-                title: 'Grid columns',
-                subtitle: '$gridColumns columns',
-                trailing: const Icon(
-                  Icons.chevron_right_rounded,
-                  size: 20,
-                  color: AppColors.muted,
-                ),
-                onTap: () => _showGridSheet(context, isDark),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.lg),
-
-          _SectionLabel('Optimization'),
-          _SettingsCard(
-            isDark: isDark,
-            children: [
-              _SettingsTile(
-                isDark: isDark,
-                icon: Icons.tune_rounded,
-                iconColor: AppColors.success,
-                title: 'Default platform',
-                subtitle: 'WhatsApp Status',
-                trailing: const Icon(
-                  Icons.chevron_right_rounded,
-                  size: 20,
-                  color: AppColors.muted,
-                ),
-                onTap: () => _showComingSoon(context),
-              ),
-              _TileDivider(isDark: isDark),
-              _SettingsTile(
-                isDark: isDark,
-                icon: Icons.high_quality_rounded,
-                iconColor: AppColors.coral,
-                title: 'Quality mode',
-                subtitle: 'Balanced',
-                trailing: const Icon(
-                  Icons.chevron_right_rounded,
-                  size: 20,
-                  color: AppColors.muted,
-                ),
-                onTap: () => _showComingSoon(context),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.lg),
-
-          _SectionLabel('Storage'),
-          _SettingsCard(
-            isDark: isDark,
-            children: [
-              _SettingsTile(
-                isDark: isDark,
-                icon: Icons.cleaning_services_outlined,
-                iconColor: AppColors.primary,
-                title: 'Clear cache',
-                subtitle: 'Remove temporary files',
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Cache cleared'),
-                      behavior: SnackBarBehavior.floating,
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.lg),
-
-          _SectionLabel('About'),
-          _SettingsCard(
-            isDark: isDark,
-            children: [
-              _SettingsTile(
-                isDark: isDark,
-                icon: Icons.star_outline_rounded,
-                iconColor: const Color(0xFFFFB800),
-                title: 'Rate SnapTune',
-                subtitle: 'Enjoying the app? Share the love',
-                trailing: const Icon(
-                  Icons.chevron_right_rounded,
-                  size: 20,
-                  color: AppColors.muted,
-                ),
-                onTap: () => _showComingSoon(context),
-              ),
-              _TileDivider(isDark: isDark),
-              _SettingsTile(
-                isDark: isDark,
-                icon: Icons.feedback_outlined,
-                iconColor: AppColors.violet,
-                title: 'Send feedback',
-                subtitle: 'Help us improve SnapTune',
-                trailing: const Icon(
-                  Icons.chevron_right_rounded,
-                  size: 20,
-                  color: AppColors.muted,
-                ),
-                onTap: () => _showComingSoon(context),
-              ),
-              _TileDivider(isDark: isDark),
-              _SettingsTile(
-                isDark: isDark,
-                icon: Icons.privacy_tip_outlined,
-                iconColor: AppColors.primary,
-                title: 'Privacy policy',
-                trailing: const Icon(
-                  Icons.chevron_right_rounded,
-                  size: 20,
-                  color: AppColors.muted,
-                ),
-                onTap: () => _showComingSoon(context),
-              ),
-              _TileDivider(isDark: isDark),
-              _SettingsTile(
-                isDark: isDark,
-                icon: Icons.info_outline_rounded,
-                iconColor: isDark ? AppColors.darkMuted : AppColors.muted,
-                title: 'Version',
-                subtitle: '1.0.0 (build 1)',
-                onTap: null,
-              ),
-            ],
-          ),
-        ],
-      ),
-    ),
     );
   }
 
-  void _showComingSoon(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Coming soon'),
-        behavior: SnackBarBehavior.floating,
-        duration: Duration(seconds: 2),
+  void _showQualitySheet(BuildContext context, bool isDark) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _QualitySheet(
+        isDark: isDark,
+        current: _qualityMode,
+        onPick: (mode) {
+          _setQualityMode(mode);
+          Navigator.pop(context);
+        },
       ),
     );
   }
@@ -238,7 +107,568 @@ class SettingsPage extends StatelessWidget {
       builder: (_) => _GridSheet(isDark: isDark),
     );
   }
+
+  void _showPrivacySheet(BuildContext context, bool isDark) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _PrivacySheet(isDark: isDark),
+    );
+  }
+
+  Future<void> _sendFeedback() async {
+    await Share.share(
+      'Hi SnapTune team,\n\nI wanted to share some feedback:\n\n[Your message here]',
+      subject: 'SnapTune Feedback',
+    );
+  }
+
+  Future<void> _rateApp() async {
+    await Share.share(
+      'Check out SnapTune — a beautiful, on-device gallery and media optimizer!\nhttps://github.com/Ferousco-dev/SnapTune',
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final currentMode = sl<ThemeNotifier>().mode;
+
+    final appearanceSubtitle = switch (currentMode) {
+      ThemeMode.light => 'Light',
+      ThemeMode.dark => 'Dark',
+      _ => 'Follow system',
+    };
+
+    return ValueListenableBuilder<int>(
+      valueListenable: sl<GridColumnsNotifier>(),
+      builder: (context, cols, _) => Scaffold(
+        backgroundColor: theme.scaffoldBackgroundColor,
+        appBar: AppBar(
+          backgroundColor: theme.scaffoldBackgroundColor,
+          automaticallyImplyLeading: false,
+          title: Text(
+            'Settings',
+            style: AppTypography.outfit(
+              fontSize: 26,
+              fontWeight: FontWeight.w700,
+              color: theme.colorScheme.onSurface,
+              letterSpacing: -0.3,
+            ),
+          ),
+        ),
+        body: ListView(
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            AppSpacing.xs,
+            AppSpacing.md,
+            MediaQuery.of(context).padding.bottom + AppSpacing.lg,
+          ),
+          children: [
+            _AppCard(isDark: isDark),
+            const SizedBox(height: AppSpacing.lg),
+
+            _SectionLabel('Preferences'),
+            _SettingsCard(
+              isDark: isDark,
+              children: [
+                _SettingsTile(
+                  isDark: isDark,
+                  icon: Icons.palette_outlined,
+                  iconColor: AppColors.violet,
+                  title: 'Appearance',
+                  subtitle: appearanceSubtitle,
+                  trailing: const Icon(Icons.chevron_right_rounded,
+                      size: 20, color: AppColors.muted),
+                  onTap: () => _showAppearanceSheet(context, isDark),
+                ),
+                _TileDivider(isDark: isDark),
+                _SettingsTile(
+                  isDark: isDark,
+                  icon: Icons.grid_view_rounded,
+                  iconColor: AppColors.primary,
+                  title: 'Grid columns',
+                  subtitle: '$cols columns',
+                  trailing: const Icon(Icons.chevron_right_rounded,
+                      size: 20, color: AppColors.muted),
+                  onTap: () => _showGridSheet(context, isDark),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.lg),
+
+            _SectionLabel('Optimization'),
+            _SettingsCard(
+              isDark: isDark,
+              children: [
+                _SettingsTile(
+                  isDark: isDark,
+                  icon: Icons.tune_rounded,
+                  iconColor: AppColors.success,
+                  title: 'Default platform',
+                  subtitle: _defaultPlatformName,
+                  trailing: const Icon(Icons.chevron_right_rounded,
+                      size: 20, color: AppColors.muted),
+                  onTap: () => _showPlatformSheet(context, isDark),
+                ),
+                _TileDivider(isDark: isDark),
+                _SettingsTile(
+                  isDark: isDark,
+                  icon: Icons.high_quality_rounded,
+                  iconColor: AppColors.coral,
+                  title: 'Quality mode',
+                  subtitle: _qualityMode,
+                  trailing: const Icon(Icons.chevron_right_rounded,
+                      size: 20, color: AppColors.muted),
+                  onTap: () => _showQualitySheet(context, isDark),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.lg),
+
+            _SectionLabel('Storage'),
+            _SettingsCard(
+              isDark: isDark,
+              children: [
+                _SettingsTile(
+                  isDark: isDark,
+                  icon: Icons.cleaning_services_outlined,
+                  iconColor: AppColors.primary,
+                  title: 'Clear cache',
+                  subtitle: 'Remove temporary files',
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Cache cleared'),
+                        behavior: SnackBarBehavior.floating,
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.lg),
+
+            _SectionLabel('About'),
+            _SettingsCard(
+              isDark: isDark,
+              children: [
+                _SettingsTile(
+                  isDark: isDark,
+                  icon: Icons.star_outline_rounded,
+                  iconColor: const Color(0xFFFFB800),
+                  title: 'Rate SnapTune',
+                  subtitle: 'Enjoying the app? Share the love',
+                  trailing: const Icon(Icons.chevron_right_rounded,
+                      size: 20, color: AppColors.muted),
+                  onTap: _rateApp,
+                ),
+                _TileDivider(isDark: isDark),
+                _SettingsTile(
+                  isDark: isDark,
+                  icon: Icons.feedback_outlined,
+                  iconColor: AppColors.violet,
+                  title: 'Send feedback',
+                  subtitle: 'Help us improve SnapTune',
+                  trailing: const Icon(Icons.chevron_right_rounded,
+                      size: 20, color: AppColors.muted),
+                  onTap: _sendFeedback,
+                ),
+                _TileDivider(isDark: isDark),
+                _SettingsTile(
+                  isDark: isDark,
+                  icon: Icons.privacy_tip_outlined,
+                  iconColor: AppColors.primary,
+                  title: 'Privacy policy',
+                  trailing: const Icon(Icons.chevron_right_rounded,
+                      size: 20, color: AppColors.muted),
+                  onTap: () => _showPrivacySheet(context, isDark),
+                ),
+                _TileDivider(isDark: isDark),
+                _SettingsTile(
+                  isDark: isDark,
+                  icon: Icons.info_outline_rounded,
+                  iconColor: isDark ? AppColors.darkMuted : AppColors.muted,
+                  title: 'Version',
+                  subtitle: '1.0.0 (build 1)',
+                  onTap: null,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
+
+// ── Platform picker sheet ─────────────────────────────────────────────────────
+
+class _PlatformSheet extends StatelessWidget {
+  final bool isDark;
+  final String currentId;
+  final void Function(String id) onPick;
+
+  const _PlatformSheet({
+    required this.isDark,
+    required this.currentId,
+    required this.onPick,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurface : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 18),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.darkOutline : AppColors.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Text(
+            'Default platform',
+            style: AppTypography.outfit(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: theme.colorScheme.onSurface,
+            ),
+          ),
+          Text(
+            'Used as the preset when you open Optimize',
+            style: AppTypography.dmSans(
+              fontSize: 13,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 16),
+          ...PlatformPreset.all.map((preset) {
+            final selected = preset.id.name == currentId;
+            return InkWell(
+              onTap: () => onPick(preset.id.name),
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 4, vertical: 12),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: preset.color.withAlpha(isDark ? 40 : 22),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(preset.icon,
+                          color: preset.color, size: 18),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            preset.name,
+                            style: AppTypography.dmSans(
+                              fontSize: 14,
+                              fontWeight: selected
+                                  ? FontWeight.w600
+                                  : FontWeight.w500,
+                              color: selected
+                                  ? AppColors.primary
+                                  : theme.colorScheme.onSurface,
+                            ),
+                          ),
+                          Text(
+                            preset.specs,
+                            style: AppTypography.dmSans(
+                              fontSize: 11,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (selected)
+                      const Icon(Icons.check_rounded,
+                          color: AppColors.primary, size: 18),
+                  ],
+                ),
+              ),
+            );
+          }),
+          SizedBox(
+              height: MediaQuery.of(context).padding.bottom + 4),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Quality mode sheet ────────────────────────────────────────────────────────
+
+class _QualitySheet extends StatelessWidget {
+  final bool isDark;
+  final String current;
+  final void Function(String) onPick;
+
+  const _QualitySheet({
+    required this.isDark,
+    required this.current,
+    required this.onPick,
+  });
+
+  static const _options = [
+    (
+      label: 'Balanced',
+      subtitle: 'Good quality, smaller files',
+      icon: Icons.balance_rounded,
+    ),
+    (
+      label: 'High quality',
+      subtitle: 'Larger files, better detail',
+      icon: Icons.hd_rounded,
+    ),
+    (
+      label: 'Max quality',
+      subtitle: 'Largest files, no compression loss',
+      icon: Icons.star_rounded,
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurface : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 18),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.darkOutline : AppColors.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Text(
+            'Quality mode',
+            style: AppTypography.outfit(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: theme.colorScheme.onSurface,
+            ),
+          ),
+          Text(
+            'Affects output file size when optimizing',
+            style: AppTypography.dmSans(
+              fontSize: 13,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 16),
+          ..._options.map((opt) {
+            final selected = opt.label == current;
+            return InkWell(
+              onTap: () => onPick(opt.label),
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 4, vertical: 12),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: AppColors.coral
+                            .withAlpha(isDark ? 40 : 22),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(opt.icon,
+                          color: AppColors.coral, size: 18),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            opt.label,
+                            style: AppTypography.dmSans(
+                              fontSize: 14,
+                              fontWeight: selected
+                                  ? FontWeight.w600
+                                  : FontWeight.w500,
+                              color: selected
+                                  ? AppColors.primary
+                                  : theme.colorScheme.onSurface,
+                            ),
+                          ),
+                          Text(
+                            opt.subtitle,
+                            style: AppTypography.dmSans(
+                              fontSize: 11,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (selected)
+                      const Icon(Icons.check_rounded,
+                          color: AppColors.primary, size: 18),
+                  ],
+                ),
+              ),
+            );
+          }),
+          SizedBox(
+              height: MediaQuery.of(context).padding.bottom + 4),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Privacy policy sheet ──────────────────────────────────────────────────────
+
+class _PrivacySheet extends StatelessWidget {
+  final bool isDark;
+  const _PrivacySheet({required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurface : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 18),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.darkOutline : AppColors.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Text(
+            'Privacy Policy',
+            style: AppTypography.outfit(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: theme.colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _PrivacySection(
+            isDark: isDark,
+            title: 'Your data stays on your device',
+            body:
+                'SnapTune processes all photos and videos entirely on-device. No media, metadata, or personal information is ever uploaded to external servers.',
+          ),
+          _PrivacySection(
+            isDark: isDark,
+            title: 'Face detection',
+            body:
+                'The People feature uses on-device ML (Google ML Kit) to detect faces. Face data is never stored persistently and never leaves your device.',
+          ),
+          _PrivacySection(
+            isDark: isDark,
+            title: 'Photo library access',
+            body:
+                'SnapTune requests access to your photo library solely to display, browse, and optimize your media. We do not read or transmit any file outside the app.',
+          ),
+          _PrivacySection(
+            isDark: isDark,
+            title: 'Preferences',
+            body:
+                'Settings such as theme, grid columns, and default platform are stored locally in SharedPreferences on your device.',
+          ),
+          SizedBox(height: MediaQuery.of(context).padding.bottom + 4),
+        ],
+      ),
+    );
+  }
+}
+
+class _PrivacySection extends StatelessWidget {
+  final bool isDark;
+  final String title;
+  final String body;
+  const _PrivacySection(
+      {required this.isDark, required this.title, required this.body});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: AppTypography.dmSans(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: theme.colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            body,
+            style: AppTypography.dmSans(
+              fontSize: 13,
+              color: theme.colorScheme.onSurfaceVariant,
+              height: 1.55,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── App card ──────────────────────────────────────────────────────────────────
 
 class _AppCard extends StatelessWidget {
   final bool isDark;
@@ -292,6 +722,8 @@ class _AppCard extends StatelessWidget {
   }
 }
 
+// ── Section label ─────────────────────────────────────────────────────────────
+
 class _SectionLabel extends StatelessWidget {
   final String label;
   const _SectionLabel(this.label);
@@ -312,6 +744,8 @@ class _SectionLabel extends StatelessWidget {
     );
   }
 }
+
+// ── Settings card ─────────────────────────────────────────────────────────────
 
 class _SettingsCard extends StatelessWidget {
   final bool isDark;
@@ -337,6 +771,8 @@ class _SettingsCard extends StatelessWidget {
     );
   }
 }
+
+// ── Settings tile ─────────────────────────────────────────────────────────────
 
 class _SettingsTile extends StatelessWidget {
   final bool isDark;
@@ -416,6 +852,8 @@ class _SettingsTile extends StatelessWidget {
   }
 }
 
+// ── Tile divider ──────────────────────────────────────────────────────────────
+
 class _TileDivider extends StatelessWidget {
   final bool isDark;
   const _TileDivider({required this.isDark});
@@ -431,6 +869,8 @@ class _TileDivider extends StatelessWidget {
     );
   }
 }
+
+// ── Appearance sheet ──────────────────────────────────────────────────────────
 
 class _AppearanceSheet extends StatelessWidget {
   final bool isDark;
@@ -511,6 +951,8 @@ class _AppearanceSheet extends StatelessWidget {
   }
 }
 
+// ── Grid sheet ────────────────────────────────────────────────────────────────
+
 class _GridSheet extends StatelessWidget {
   final bool isDark;
   const _GridSheet({required this.isDark});
@@ -585,6 +1027,8 @@ class _GridSheet extends StatelessWidget {
     );
   }
 }
+
+// ── Sheet option (shared) ─────────────────────────────────────────────────────
 
 class _SheetOption extends StatelessWidget {
   final bool isDark;
