@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -58,6 +59,7 @@ class AlbumsPage extends StatefulWidget {
 
 class _AlbumsPageState extends State<AlbumsPage> {
   List<AssetPathEntity> _albums = [];
+  AssetPathEntity? _recentlyDeleted;
   bool _loading = true;
 
   @override
@@ -71,8 +73,19 @@ class _AlbumsPageState extends State<AlbumsPage> {
       type: RequestType.common,
       onlyAll: false,
     );
-    final candidates = raw.where((a) => !a.isAll).toList();
-    // Load counts in parallel so we can drop empty albums immediately
+
+    AssetPathEntity? recentlyDeleted;
+    final candidates = <AssetPathEntity>[];
+    for (final a in raw) {
+      if (!a.isAll) {
+        if (a.name.toLowerCase().contains('recently deleted')) {
+          recentlyDeleted = a;
+        } else {
+          candidates.add(a);
+        }
+      }
+    }
+
     final counted = await Future.wait(
       candidates.map((a) async => (album: a, count: await a.assetCountAsync)),
     );
@@ -85,8 +98,64 @@ class _AlbumsPageState extends State<AlbumsPage> {
     if (!mounted) return;
     setState(() {
       _albums = nonEmpty.map((r) => r.album).toList();
+      _recentlyDeleted = recentlyDeleted;
       _loading = false;
     });
+  }
+
+  Future<void> _showCreateAlbumDialog() async {
+    final nameCtrl = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          'New Album',
+          style: AppTypography.outfit(
+              fontSize: 18, fontWeight: FontWeight.w700),
+        ),
+        content: TextField(
+          controller: nameCtrl,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(hintText: 'Album name'),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Create')),
+        ],
+      ),
+    );
+    final name = nameCtrl.text.trim();
+    nameCtrl.dispose();
+    if (confirmed != true || name.isEmpty) return;
+    if (!Platform.isIOS && !Platform.isMacOS) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Album creation is only supported on iOS'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+    try {
+      await PhotoManager.editor.darwin.createAlbum(name);
+      _load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not create album: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -96,6 +165,13 @@ class _AlbumsPageState extends State<AlbumsPage> {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showCreateAlbumDialog,
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: const Icon(Icons.add_rounded),
+      ),
       appBar: AppBar(
         backgroundColor: theme.scaffoldBackgroundColor,
         automaticallyImplyLeading: false,
@@ -111,36 +187,142 @@ class _AlbumsPageState extends State<AlbumsPage> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : _albums.isEmpty
-              ? _EmptyAlbumsState(isDark: isDark)
-              : GridView.builder(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.md,
-                    AppSpacing.sm,
-                    AppSpacing.md,
-                    AppSpacing.lg,
-                  ),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 16,
-                    childAspectRatio: 0.82,
-                  ),
-                  itemCount: _albums.length,
-                  itemBuilder: (context, index) {
-                    final album = _albums[index];
-                    return _AlbumCard(
-                      album: album,
-                      isDark: isDark,
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => _AlbumDetailPage(album: album),
+          : CustomScrollView(
+              slivers: [
+                // Special albums row
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.md, AppSpacing.sm, AppSpacing.md, 0),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _SpecialAlbumCard(
+                            label: 'People',
+                            icon: Icons.face_rounded,
+                            isDark: isDark,
+                            onTap: () => context.push(Routes.people),
+                          ),
                         ),
-                      ),
-                    );
-                  },
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _SpecialAlbumCard(
+                            label: 'Recently Deleted',
+                            icon: Icons.delete_outline_rounded,
+                            isDark: isDark,
+                            onTap: _recentlyDeleted != null
+                                ? () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => _AlbumDetailPage(
+                                            album: _recentlyDeleted!),
+                                      ),
+                                    )
+                                : null,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
+                if (_albums.isEmpty)
+                  SliverFillRemaining(
+                    child: _EmptyAlbumsState(isDark: isDark),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.md,
+                      AppSpacing.md,
+                      AppSpacing.md,
+                      AppSpacing.lg,
+                    ),
+                    sliver: SliverGrid(
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 16,
+                        childAspectRatio: 0.82,
+                      ),
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final album = _albums[index];
+                          return _AlbumCard(
+                            album: album,
+                            isDark: isDark,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    _AlbumDetailPage(album: album),
+                              ),
+                            ),
+                          );
+                        },
+                        childCount: _albums.length,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+    );
+  }
+}
+
+class _SpecialAlbumCard extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool isDark;
+  final VoidCallback? onTap;
+
+  const _SpecialAlbumCard({
+    required this.label,
+    required this.icon,
+    required this.isDark,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final enabled = onTap != null;
+    return GestureDetector(
+      onTap: onTap,
+      child: Opacity(
+        opacity: enabled ? 1.0 : 0.45,
+        child: Container(
+          height: 60,
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.darkSurfaceVariant : AppColors.surfaceVariant,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Row(
+            children: [
+              Icon(icon, size: 20, color: AppColors.primary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.dmSans(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
