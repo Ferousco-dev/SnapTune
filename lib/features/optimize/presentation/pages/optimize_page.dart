@@ -32,16 +32,14 @@ class _OptimizePageState extends State<OptimizePage> {
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: theme.scaffoldBackgroundColor,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-          onPressed: () => context.pop(),
-        ),
+        automaticallyImplyLeading: false,
         title: Text(
           'Optimize',
           style: AppTypography.outfit(
-            fontSize: 20,
+            fontSize: 26,
             fontWeight: FontWeight.w700,
             color: theme.colorScheme.onSurface,
+            letterSpacing: -0.3,
           ),
         ),
       ),
