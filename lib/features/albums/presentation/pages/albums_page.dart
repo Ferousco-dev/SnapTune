@@ -59,7 +59,6 @@ class AlbumsPage extends StatefulWidget {
 
 class _AlbumsPageState extends State<AlbumsPage> {
   List<AssetPathEntity> _albums = [];
-  AssetPathEntity? _recentlyDeleted;
   bool _loading = true;
 
   @override
@@ -73,19 +72,7 @@ class _AlbumsPageState extends State<AlbumsPage> {
       type: RequestType.common,
       onlyAll: false,
     );
-
-    AssetPathEntity? recentlyDeleted;
-    final candidates = <AssetPathEntity>[];
-    for (final a in raw) {
-      if (!a.isAll) {
-        if (a.name.toLowerCase().contains('recently deleted')) {
-          recentlyDeleted = a;
-        } else {
-          candidates.add(a);
-        }
-      }
-    }
-
+    final candidates = raw.where((a) => !a.isAll).toList();
     final counted = await Future.wait(
       candidates.map((a) async => (album: a, count: await a.assetCountAsync)),
     );
@@ -98,9 +85,17 @@ class _AlbumsPageState extends State<AlbumsPage> {
     if (!mounted) return;
     setState(() {
       _albums = nonEmpty.map((r) => r.album).toList();
-      _recentlyDeleted = recentlyDeleted;
       _loading = false;
     });
+  }
+
+  void _showRecentlyDeletedInfo() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _RecentlyDeletedSheet(isDark: isDark),
+    );
   }
 
   Future<void> _showCreateAlbumDialog() async {
@@ -189,15 +184,7 @@ class _AlbumsPageState extends State<AlbumsPage> {
                             label: 'Recently Deleted',
                             icon: Icons.delete_outline_rounded,
                             isDark: isDark,
-                            onTap: _recentlyDeleted != null
-                                ? () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => _AlbumDetailPage(
-                                            album: _recentlyDeleted!),
-                                      ),
-                                    )
-                                : null,
+                            onTap: _showRecentlyDeletedInfo,
                           ),
                         ),
                       ],
@@ -628,6 +615,96 @@ class _EmptyAlbumsState extends StatelessWidget {
             style: AppTypography.dmSans(
               fontSize: 13,
               color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecentlyDeletedSheet extends StatelessWidget {
+  final bool isDark;
+  const _RecentlyDeletedSheet({required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurface : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Drag handle
+          Container(
+            width: 36,
+            height: 4,
+            margin: const EdgeInsets.only(bottom: 24),
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.darkOutline : AppColors.outlineVariant,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: isDark
+                  ? AppColors.darkSurfaceVariant
+                  : AppColors.surfaceVariant,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.delete_outline_rounded,
+              size: 30,
+              color: AppColors.muted,
+            ),
+          ),
+          const SizedBox(height: 18),
+          Text(
+            'Recently Deleted',
+            style: AppTypography.outfit(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: theme.colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'iOS keeps recently deleted photos in a protected album that third-party apps cannot access.\n\nTo view or restore them, open the Photos app, go to Albums, and scroll down to Recently Deleted.',
+            textAlign: TextAlign.center,
+            style: AppTypography.dmSans(
+              fontSize: 14,
+              height: 1.5,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 24),
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              height: 50,
+              decoration: BoxDecoration(
+                color: isDark
+                    ? AppColors.darkSurfaceVariant
+                    : AppColors.surfaceVariant,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Center(
+                child: Text(
+                  'Got it',
+                  style: AppTypography.dmSans(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+              ),
             ),
           ),
         ],
