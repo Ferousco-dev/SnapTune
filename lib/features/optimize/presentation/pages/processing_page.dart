@@ -1,6 +1,9 @@
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image/image.dart' as img;
+import 'package:photo_manager/photo_manager.dart';
 import '../../../../core/router/routes.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
@@ -16,14 +19,76 @@ class ProcessingPage extends StatefulWidget {
   State<ProcessingPage> createState() => _ProcessingPageState();
 }
 
+// ── Isolate-safe task / result ────────────────────────────────────────────────
+
+class _Task {
+  final Uint8List inputBytes;
+  final int maxWidth;
+  final int maxHeight;
+  final int jpegQuality;
+  const _Task({
+    required this.inputBytes,
+    required this.maxWidth,
+    required this.maxHeight,
+    required this.jpegQuality,
+  });
+}
+
+class _Result {
+  final Uint8List outputBytes;
+  final int originalSize;
+  const _Result({required this.outputBytes, required this.originalSize});
+}
+
+// Top-level so compute() can send it to a background isolate
+Future<_Result> _processImage(_Task task) async {
+  final originalSize = task.inputBytes.length;
+
+  // Telegram / lossless: skip re-encoding, just copy through
+  if (task.maxWidth == 0 && task.maxHeight == 0 && task.jpegQuality == 100) {
+    return _Result(outputBytes: task.inputBytes, originalSize: originalSize);
+  }
+
+  final decoded = img.decodeImage(task.inputBytes);
+  if (decoded == null) {
+    return _Result(outputBytes: task.inputBytes, originalSize: originalSize);
+  }
+
+  img.Image output = decoded;
+
+  // Resize to fit within target bounds (scale down only)
+  final tw = task.maxWidth > 0 ? task.maxWidth : decoded.width;
+  final th = task.maxHeight > 0 ? task.maxHeight : decoded.height;
+  final scaleX = tw / decoded.width;
+  final scaleY = th / decoded.height;
+  final scale = math.min(scaleX, scaleY);
+
+  if (scale < 1.0) {
+    output = img.copyResize(
+      decoded,
+      width: (decoded.width * scale).round(),
+      height: (decoded.height * scale).round(),
+      interpolation: img.Interpolation.linear,
+    );
+  }
+
+  final encoded = img.encodeJpg(output, quality: task.jpegQuality);
+  return _Result(
+    outputBytes: Uint8List.fromList(encoded),
+    originalSize: originalSize,
+  );
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
+
 class _ProcessingPageState extends State<ProcessingPage>
     with TickerProviderStateMixin {
   late final AnimationController _ringController;
   late final AnimationController _pulseController;
-  late final AnimationController _stepController;
 
   int _stepIndex = 0;
   double _progress = 0.0;
+  String? _errorMsg;
 
   static const _steps = [
     'Analyzing media...',
@@ -31,8 +96,6 @@ class _ProcessingPageState extends State<ProcessingPage>
     'Encoding output...',
     'Finalizing...',
   ];
-
-  static const _stepDurations = [1400, 1800, 2200, 600];
 
   @override
   void initState() {
@@ -48,42 +111,88 @@ class _ProcessingPageState extends State<ProcessingPage>
       duration: const Duration(milliseconds: 1600),
     )..repeat(reverse: true);
 
-    _stepController = AnimationController(vsync: this);
-
-    _runSteps();
+    _run();
   }
 
-  Future<void> _runSteps() async {
-    for (int i = 0; i < _steps.length; i++) {
-      if (!mounted) return;
-      setState(() {
-        _stepIndex = i;
-        _progress = i / _steps.length;
-      });
+  Future<void> _run() async {
+    final item = widget.args?.item;
+    final preset = widget.args?.preset ?? PlatformPreset.all.first;
 
-      await Future.delayed(Duration(milliseconds: _stepDurations[i]));
+    _setStep(0, 0.05);
+
+    Uint8List? inputBytes;
+    if (item != null) {
+      try {
+        final asset = await AssetEntity.fromId(item.id);
+        inputBytes = await asset?.originBytes;
+      } catch (_) {}
     }
 
     if (!mounted) return;
-    setState(() => _progress = 1.0);
 
+    if (inputBytes == null || item == null) {
+      // No media: skip straight to result with no bytes
+      _setStep(3, 1.0);
+      await Future.delayed(const Duration(milliseconds: 400));
+      if (!mounted) return;
+      context.pushReplacement(
+        Routes.result,
+        extra: ResultArgs(preset: preset),
+      );
+      return;
+    }
+
+    _setStep(1, 0.25);
+
+    _Result result;
+    try {
+      result = await compute(
+        _processImage,
+        _Task(
+          inputBytes: inputBytes,
+          maxWidth: preset.maxWidth,
+          maxHeight: preset.maxHeight,
+          jpegQuality: preset.jpegQuality,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _errorMsg = 'Processing failed: $e');
+      return;
+    }
+
+    if (!mounted) return;
+    _setStep(2, 0.75);
     await Future.delayed(const Duration(milliseconds: 300));
+
+    if (!mounted) return;
+    _setStep(3, 1.0);
+    await Future.delayed(const Duration(milliseconds: 400));
 
     if (!mounted) return;
     context.pushReplacement(
       Routes.result,
       extra: ResultArgs(
-        preset: widget.args?.preset ?? PlatformPreset.all.first,
-        item: widget.args?.item,
+        preset: preset,
+        item: item,
+        outputBytes: result.outputBytes,
+        originalSizeBytes: result.originalSize,
       ),
     );
+  }
+
+  void _setStep(int index, double progress) {
+    if (!mounted) return;
+    setState(() {
+      _stepIndex = index;
+      _progress = progress;
+    });
   }
 
   @override
   void dispose() {
     _ringController.dispose();
     _pulseController.dispose();
-    _stepController.dispose();
     super.dispose();
   }
 
@@ -91,6 +200,66 @@ class _ProcessingPageState extends State<ProcessingPage>
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final preset = widget.args?.preset ?? PlatformPreset.all.first;
+
+    if (_errorMsg != null) {
+      return Scaffold(
+        backgroundColor: isDark ? AppColors.darkBackground : AppColors.background,
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline_rounded,
+                      size: 48, color: AppColors.error),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Something went wrong',
+                    style: AppTypography.outfit(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _errorMsg!,
+                    textAlign: TextAlign.center,
+                    style: AppTypography.dmSans(
+                      fontSize: 13,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  GestureDetector(
+                    onTap: () => context.go(Routes.gallery),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 32, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? AppColors.darkSurfaceVariant
+                            : AppColors.surfaceVariant,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Text(
+                        'Back to gallery',
+                        style: AppTypography.dmSans(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor:
@@ -133,8 +302,8 @@ class _ProcessingPageState extends State<ProcessingPage>
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: AppColors.primary
-                              .withAlpha((40 * (1 - _pulseController.value)).toInt()),
+                          color: AppColors.primary.withAlpha(
+                              (40 * (1 - _pulseController.value)).toInt()),
                           width: 1.5,
                         ),
                       ),
@@ -170,8 +339,7 @@ class _ProcessingPageState extends State<ProcessingPage>
                           color: preset.color.withAlpha(isDark ? 40 : 25),
                           borderRadius: BorderRadius.circular(16),
                         ),
-                        child: Icon(preset.icon,
-                            color: preset.color, size: 26),
+                        child: Icon(preset.icon, color: preset.color, size: 26),
                       ),
                       const SizedBox(height: 8),
                       AnimatedBuilder(
@@ -193,7 +361,7 @@ class _ProcessingPageState extends State<ProcessingPage>
 
             const SizedBox(height: 40),
 
-            // Step indicator
+            // Step label
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 300),
               transitionBuilder: (child, animation) => FadeTransition(
@@ -322,15 +490,18 @@ class _ProgressArcPainter extends CustomPainter {
       progressPaint,
     );
 
-    // Spinning leading dot
+    // Leading dot at the arc tip
     if (progress < 1.0) {
       final dotAngle = -math.pi / 2 + 2 * math.pi * progress;
       final dotX = center.dx + radius * math.cos(dotAngle);
       final dotY = center.dy + radius * math.sin(dotAngle);
-      final dotPaint = Paint()
-        ..color = color
-        ..style = PaintingStyle.fill;
-      canvas.drawCircle(Offset(dotX, dotY), 5, dotPaint);
+      canvas.drawCircle(
+        Offset(dotX, dotY),
+        5,
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.fill,
+      );
     }
   }
 
