@@ -1,15 +1,375 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:photo_manager/photo_manager.dart';
+import '../../../../core/router/routes.dart';
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/constants/app_spacing.dart';
+import '../../../gallery/data/models/media_item_model.dart';
+import '../../../gallery/domain/entities/media_item.dart';
+import '../../../gallery/presentation/widgets/media_thumbnail.dart';
+import '../../../viewer/presentation/pages/viewer_page.dart';
 
-class AlbumsPage extends StatelessWidget {
+class AlbumsPage extends StatefulWidget {
   const AlbumsPage({super.key});
 
   @override
+  State<AlbumsPage> createState() => _AlbumsPageState();
+}
+
+class _AlbumsPageState extends State<AlbumsPage> {
+  List<AssetPathEntity> _albums = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final albums = await PhotoManager.getAssetPathList(
+      type: RequestType.common,
+      onlyAll: false,
+    );
+    final filtered = albums.where((a) => !a.isAll).toList();
+    if (!mounted) return;
+    setState(() {
+      _albums = filtered;
+      _loading = false;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+
     return Scaffold(
-      body: Center(
-        child: Text('Albums', style: AppTypography.outfit(fontSize: 22, fontWeight: FontWeight.w700)),
+      backgroundColor: theme.scaffoldBackgroundColor,
+      appBar: AppBar(
+        backgroundColor: theme.scaffoldBackgroundColor,
+        automaticallyImplyLeading: false,
+        title: Text(
+          'Albums',
+          style: AppTypography.outfit(
+            fontSize: 26,
+            fontWeight: FontWeight.w700,
+            color: theme.colorScheme.onSurface,
+            letterSpacing: -0.3,
+          ),
+        ),
       ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _albums.isEmpty
+              ? _EmptyAlbumsState(isDark: isDark)
+              : GridView.builder(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.md,
+                    AppSpacing.sm,
+                    AppSpacing.md,
+                    AppSpacing.lg,
+                  ),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 16,
+                    childAspectRatio: 0.82,
+                  ),
+                  itemCount: _albums.length,
+                  itemBuilder: (context, index) {
+                    final album = _albums[index];
+                    return _AlbumCard(
+                      album: album,
+                      isDark: isDark,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => _AlbumDetailPage(album: album),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+    );
+  }
+}
+
+class _AlbumCard extends StatefulWidget {
+  final AssetPathEntity album;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _AlbumCard({
+    required this.album,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  State<_AlbumCard> createState() => _AlbumCardState();
+}
+
+class _AlbumCardState extends State<_AlbumCard> {
+  Uint8List? _thumbnail;
+  int _count = 0;
+  bool _loadingThumb = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final count = await widget.album.assetCountAsync;
+    if (!mounted) return;
+    setState(() => _count = count);
+    if (count == 0) {
+      setState(() => _loadingThumb = false);
+      return;
+    }
+    final assets = await widget.album.getAssetListRange(start: 0, end: 1);
+    if (assets.isEmpty || !mounted) return;
+    final bytes = await assets.first.thumbnailDataWithSize(
+      const ThumbnailSize(400, 400),
+    );
+    if (!mounted) return;
+    setState(() {
+      _thumbnail = bytes;
+      _loadingThumb = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.isDark;
+    final theme = Theme.of(context);
+
+    return GestureDetector(
+      onTap: widget.onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                width: double.infinity,
+                color: isDark
+                    ? AppColors.darkSurfaceVariant
+                    : AppColors.surfaceVariant,
+                child: _loadingThumb
+                    ? null
+                    : _thumbnail != null
+                        ? Image.memory(
+                            _thumbnail!,
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                          )
+                        : const Center(
+                            child: Icon(
+                              Icons.photo_outlined,
+                              color: AppColors.muted,
+                              size: 36,
+                            ),
+                          ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            widget.album.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.dmSans(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: theme.colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '$_count',
+            style: AppTypography.dmSans(
+              fontSize: 12,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyAlbumsState extends StatelessWidget {
+  final bool isDark;
+  const _EmptyAlbumsState({required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 84,
+            height: 84,
+            decoration: BoxDecoration(
+              color: isDark
+                  ? AppColors.darkSurfaceVariant
+                  : AppColors.surfaceVariant,
+              borderRadius: BorderRadius.circular(26),
+            ),
+            child: const Icon(
+              Icons.photo_album_outlined,
+              size: 38,
+              color: AppColors.muted,
+            ),
+          ),
+          const SizedBox(height: 18),
+          Text(
+            'No albums found',
+            style: AppTypography.outfit(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Albums on your device will appear here',
+            style: AppTypography.dmSans(
+              fontSize: 13,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Private — album detail shown via Navigator.push
+class _AlbumDetailPage extends StatefulWidget {
+  final AssetPathEntity album;
+  const _AlbumDetailPage({required this.album});
+
+  @override
+  State<_AlbumDetailPage> createState() => _AlbumDetailPageState();
+}
+
+class _AlbumDetailPageState extends State<_AlbumDetailPage> {
+  List<MediaItem> _items = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final count = await widget.album.assetCountAsync;
+    if (count == 0) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
+    final assets = await widget.album.getAssetListRange(
+      start: 0,
+      end: count,
+    );
+    final items = assets.map((a) => MediaItemModel.fromAsset(a)).toList();
+    if (!mounted) return;
+    setState(() {
+      _items = items;
+      _loading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      appBar: AppBar(
+        backgroundColor: theme.scaffoldBackgroundColor,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              widget.album.name,
+              style: AppTypography.outfit(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
+            if (!_loading)
+              Text(
+                '${_items.length} items',
+                style: AppTypography.dmSans(
+                  fontSize: 12,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+          ],
+        ),
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _items.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.photo_outlined,
+                        size: 48,
+                        color: isDark
+                            ? AppColors.darkMuted
+                            : AppColors.muted,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'No media in this album',
+                        style: AppTypography.dmSans(
+                          fontSize: 14,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : GridView.builder(
+                  padding: const EdgeInsets.all(2),
+                  gridDelegate:
+                      const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    crossAxisSpacing: 2,
+                    mainAxisSpacing: 2,
+                  ),
+                  itemCount: _items.length,
+                  itemBuilder: (context, index) => MediaThumbnail(
+                    item: _items[index],
+                    onTap: () => context.push(
+                      Routes.viewer,
+                      extra: ViewerArgs(
+                        items: _items,
+                        startIndex: index,
+                      ),
+                    ),
+                  ),
+                ),
     );
   }
 }
