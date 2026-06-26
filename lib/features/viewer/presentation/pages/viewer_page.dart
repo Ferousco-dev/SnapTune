@@ -807,19 +807,128 @@ class _ViewerOptionsSheet extends StatelessWidget {
             label: 'Delete',
             isDark: isDark,
             isDestructive: true,
-            onTap: () {
+            onTap: () async {
               Navigator.pop(context);
-              ScaffoldMessenger.of(pageContext).showSnackBar(
-                const SnackBar(
-                  content: Text('Delete coming soon'),
-                  behavior: SnackBarBehavior.floating,
-                ),
+              if (!pageContext.mounted) return;
+              final confirmed = await showDialog<bool>(
+                context: pageContext,
+                builder: (_) => _ViewerDeleteDialog(),
               );
+              if (confirmed != true || !pageContext.mounted) return;
+              try {
+                await PhotoManager.editor.deleteWithIds([item.id]);
+              } catch (_) {}
+              if (pageContext.mounted) GoRouter.of(pageContext).pop();
             },
           ),
 
           SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
         ],
+      ),
+    );
+  }
+}
+
+// ── Delete dialog ─────────────────────────────────────────────────────────────
+
+class _ViewerDeleteDialog extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.darkSurface : Colors.white,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: AppColors.error.withAlpha(isDark ? 35 : 20),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.delete_rounded,
+                  color: AppColors.error, size: 28),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Delete photo?',
+              style: AppTypography.outfit(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'This will permanently remove the photo from your library.',
+              style: AppTypography.dmSans(
+                fontSize: 13,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(context, false),
+                    child: Container(
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? AppColors.darkSurfaceVariant
+                            : AppColors.surfaceVariant,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Center(
+                        child: Text(
+                          'Cancel',
+                          style: AppTypography.dmSans(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(context, true),
+                    child: Container(
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: AppColors.error,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Center(
+                        child: Text(
+                          'Delete',
+                          style: AppTypography.dmSans(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
