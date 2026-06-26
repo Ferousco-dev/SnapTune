@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:photo_manager/photo_manager.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/di/service_locator.dart';
@@ -115,6 +116,30 @@ class _SettingsPageState extends State<SettingsPage> {
       isScrollControlled: true,
       builder: (_) => _PrivacySheet(isDark: isDark),
     );
+  }
+
+  Future<void> _clearCache() async {
+    HapticFeedback.lightImpact();
+    try {
+      await PhotoManager.clearFileCache();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cache cleared'),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Nothing to clear'),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   Future<void> _sendFeedback() async {
@@ -238,16 +263,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   iconColor: AppColors.primary,
                   title: 'Clear cache',
                   subtitle: 'Remove temporary files',
-                  onTap: () {
-                    HapticFeedback.lightImpact();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Cache cleared'),
-                        behavior: SnackBarBehavior.floating,
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                  },
+                  onTap: _clearCache,
                 ),
               ],
             ),
@@ -260,22 +276,18 @@ class _SettingsPageState extends State<SettingsPage> {
                 _SettingsTile(
                   isDark: isDark,
                   icon: Icons.star_outline_rounded,
-                  iconColor: const Color(0xFFFFB800),
+                  iconColor: AppColors.coral,
                   title: 'Rate SnapTune',
-                  subtitle: 'Enjoying the app? Share the love',
-                  trailing: const Icon(Icons.chevron_right_rounded,
-                      size: 20, color: AppColors.muted),
+                  subtitle: 'Share the love',
                   onTap: _rateApp,
                 ),
                 _TileDivider(isDark: isDark),
                 _SettingsTile(
                   isDark: isDark,
-                  icon: Icons.feedback_outlined,
+                  icon: Icons.chat_bubble_outline_rounded,
                   iconColor: AppColors.violet,
                   title: 'Send feedback',
-                  subtitle: 'Help us improve SnapTune',
-                  trailing: const Icon(Icons.chevron_right_rounded,
-                      size: 20, color: AppColors.muted),
+                  subtitle: 'Tell us what you think',
                   onTap: _sendFeedback,
                 ),
                 _TileDivider(isDark: isDark),
@@ -294,7 +306,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   icon: Icons.info_outline_rounded,
                   iconColor: isDark ? AppColors.darkMuted : AppColors.muted,
                   title: 'Version',
-                  subtitle: '1.0.0 (build 1)',
+                  subtitle: '1.0.0',
                   onTap: null,
                 ),
               ],
