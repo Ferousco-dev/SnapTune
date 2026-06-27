@@ -35,7 +35,6 @@ class _ViewerPageState extends State<ViewerPage> {
   bool _overlaysVisible = true;
   bool _photoZoomed = false;
 
-  // Swipe-down-to-dismiss state
   double _dragOffset = 0.0;
   bool _dragging = false;
 
@@ -184,7 +183,6 @@ class _ViewerPageState extends State<ViewerPage> {
   }
 }
 
-// ── Photo viewer ──────────────────────────────────────────────────────────────
 
 class _PhotoViewer extends StatefulWidget {
   final MediaItem item;
@@ -290,7 +288,6 @@ class _PhotoViewerState extends State<_PhotoViewer> {
   }
 }
 
-// ── Video viewer ──────────────────────────────────────────────────────────────
 
 class _VideoViewer extends StatefulWidget {
   final MediaItem item;
@@ -538,7 +535,6 @@ class _VideoViewerState extends State<_VideoViewer> {
   }
 }
 
-// ── Top bar ───────────────────────────────────────────────────────────────────
 
 class _TopBar extends StatelessWidget {
   final int currentIndex;
@@ -629,7 +625,6 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-// ── Bottom bar ────────────────────────────────────────────────────────────────
 
 class _BottomBar extends StatelessWidget {
   final MediaItem item;
@@ -718,7 +713,6 @@ class _BottomBar extends StatelessWidget {
   }
 }
 
-// ── Viewer options sheet ──────────────────────────────────────────────────────
 
 class _ViewerOptionsSheet extends StatelessWidget {
   final MediaItem item;
@@ -824,7 +818,6 @@ class _ViewerOptionsSheet extends StatelessWidget {
   }
 }
 
-// ── Delete dialog ─────────────────────────────────────────────────────────────
 
 class _ViewerDeleteDialog extends StatelessWidget {
   @override
@@ -929,7 +922,6 @@ class _ViewerDeleteDialog extends StatelessWidget {
   }
 }
 
-// ── Details sheet ─────────────────────────────────────────────────────────────
 
 class _DetailsSheet extends StatefulWidget {
   final MediaItem item;
@@ -1082,7 +1074,6 @@ class _DetailsSheetState extends State<_DetailsSheet> {
   }
 }
 
-// ── Shared sheet widgets ──────────────────────────────────────────────────────
 
 class _InfoRow extends StatelessWidget {
   final MediaItem item;

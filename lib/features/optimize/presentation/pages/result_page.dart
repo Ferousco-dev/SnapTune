@@ -733,7 +733,6 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-// ── Before / After slider ─────────────────────────────────────────────────────
 
 class _BeforeAfterSlider extends StatefulWidget {
   final Uint8List before;

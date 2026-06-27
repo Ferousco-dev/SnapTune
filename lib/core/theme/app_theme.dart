@@ -44,7 +44,6 @@ abstract final class AppTheme {
         pageTransitionsTheme: _pageTransitions,
       );
 
-  // ── Color Schemes ────────────────────────────────────────────────────────────
 
   static const ColorScheme _lightColorScheme = ColorScheme(
     brightness: Brightness.light,
@@ -108,7 +107,6 @@ abstract final class AppTheme {
     inversePrimary: AppColors.primary,
   );
 
-  // ── Component Themes ─────────────────────────────────────────────────────────
 
   static AppBarTheme _appBarTheme(Brightness brightness) => AppBarTheme(
         elevation: 0,

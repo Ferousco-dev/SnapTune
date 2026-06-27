@@ -390,7 +390,6 @@ class _GalleryViewState extends State<_GalleryView> {
   }
 }
 
-// ── App bar ───────────────────────────────────────────────────────────────────
 
 class _AppBar extends StatelessWidget {
   final bool isDark;
@@ -508,7 +507,6 @@ class _AppBar extends StatelessWidget {
   }
 }
 
-// ── Gallery options sheet ─────────────────────────────────────────────────────
 
 class _GalleryOptionsSheet extends StatelessWidget {
   final bool isDark;
@@ -668,7 +666,6 @@ class _SheetDivider extends StatelessWidget {
   }
 }
 
-// ── Search delegate ───────────────────────────────────────────────────────────
 
 class _GallerySearchDelegate extends SearchDelegate<MediaItem?> {
   final List<MediaItem> items;
@@ -856,7 +853,6 @@ class _ResultGrid extends StatelessWidget {
   }
 }
 
-// ── Filter bar ────────────────────────────────────────────────────────────────
 
 class _FilterBar extends StatelessWidget {
   final MediaType? activeFilter;
@@ -921,10 +917,8 @@ class _FilterBar extends StatelessWidget {
   }
 }
 
-// ── Media grid ────────────────────────────────────────────────────────────────
 
 
-// ── Selection bar ─────────────────────────────────────────────────────────────
 
 class _SelectionBar extends StatelessWidget {
   final int count;
@@ -1038,7 +1032,6 @@ class _SelectionAction extends StatelessWidget {
   }
 }
 
-// ── Delete confirmation dialog ────────────────────────────────────────────────
 
 class _DeleteConfirmDialog extends StatelessWidget {
   final int count;
@@ -1151,7 +1144,6 @@ class _DeleteConfirmDialog extends StatelessWidget {
   }
 }
 
-// ── State views ───────────────────────────────────────────────────────────────
 
 class _PermissionDeniedView extends StatelessWidget {
   const _PermissionDeniedView();

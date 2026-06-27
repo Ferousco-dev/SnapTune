@@ -51,7 +51,6 @@ class HistoryService {
     await prefs.remove(_key);
   }
 
-  // ── Aggregate helpers ─────────────────────────────────────────────────────
 
   // Daily savings in bytes for the last [days] days, index 0 = oldest.
   static List<int> dailySavings(List<OptimizationRecord> records, int days) {

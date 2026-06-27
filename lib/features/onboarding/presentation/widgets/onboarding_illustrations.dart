@@ -2,7 +2,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 
-// ── Gallery Illustration ─────────────────────────────────────────────────────
 
 class IllustrationGallery extends StatelessWidget {
   const IllustrationGallery({super.key});
@@ -111,7 +110,6 @@ class _PhotoScenePainter extends CustomPainter {
     }
   }
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
 
   void _fill(Canvas canvas, Size size, Color color) {
     canvas.drawRect(Offset.zero & size, Paint()..color = color);
@@ -128,7 +126,6 @@ class _PhotoScenePainter extends CustomPainter {
     );
   }
 
-  // ── Scenes ─────────────────────────────────────────────────────────────────
 
   void _drawSky(Canvas canvas, Size size) {
     _gradientFill(canvas, size,
@@ -444,7 +441,6 @@ class _PhotoScenePainter extends CustomPainter {
   bool shouldRepaint(_PhotoScenePainter old) => old.scene != scene;
 }
 
-// ── Optimize Illustration ────────────────────────────────────────────────────
 
 class IllustrationOptimize extends StatefulWidget {
   const IllustrationOptimize({super.key});
@@ -559,7 +555,6 @@ class _IllustrationOptimizeState extends State<IllustrationOptimize>
   }
 }
 
-// ── Share Illustration ───────────────────────────────────────────────────────
 
 class IllustrationShare extends StatelessWidget {
   const IllustrationShare({super.key});

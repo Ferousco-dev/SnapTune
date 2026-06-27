@@ -22,21 +22,21 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
   static const _steps = [
     OnboardingStepData(
-      title: 'Your Gallery,\nPerfected',
+      title: 'All your media,\none place',
       subtitle:
-          'Browse all your photos and videos in one beautiful, fast gallery.',
+          'Photos and videos from every app on your device, in one gallery.',
       assetPath: 'assets/images/onboarding_gallery.png',
     ),
     OnboardingStepData(
-      title: 'Optimize\nBefore You Share',
+      title: 'Fix before\nyou send',
       subtitle:
-          'Our engine conditions your media so it survives platform compression with zero visible loss.',
+          'SnapTune re-encodes your media so WhatsApp, Instagram and others stop destroying the quality.',
       assetPath: 'assets/images/onboarding_optimize.png',
     ),
     OnboardingStepData(
-      title: 'Share With\nConfidence',
+      title: 'Share the\noriginal quality',
       subtitle:
-          'Send to WhatsApp, Instagram, Telegram and more — always looking its best.',
+          'No more blurry Status uploads or washed-out reels. What you see is what they get.',
       assetPath: 'assets/images/onboarding_share.png',
     ),
   ];

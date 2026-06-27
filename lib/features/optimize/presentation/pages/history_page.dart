@@ -135,7 +135,6 @@ class _HistoryPageState extends State<HistoryPage> {
   }
 }
 
-// ── Tile ─────────────────────────────────────────────────────────────────────
 
 class _HistoryTile extends StatelessWidget {
   final OptimizationRecord record;
@@ -304,7 +303,6 @@ class _HistoryTile extends StatelessWidget {
   }
 }
 
-// ── Empty state ───────────────────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
   final bool isDark;

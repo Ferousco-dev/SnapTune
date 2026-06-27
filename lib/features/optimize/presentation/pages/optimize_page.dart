@@ -202,7 +202,7 @@ class _OptimizePageState extends State<OptimizePage> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          'SnapTune conditions your media so it survives platform compression with minimum visible loss.',
+                          'Re-encodes to the exact codec and bitrate each platform expects, so they skip their own compression step.',
                           style: AppTypography.dmSans(
                             fontSize: 13,
                             color: isDark
@@ -293,7 +293,6 @@ class _OptimizePageState extends State<OptimizePage> {
   }
 }
 
-// ── Photo picker strip ────────────────────────────────────────────────────────
 
 class _PhotoPickerStrip extends StatelessWidget {
   final bool isDark;
@@ -469,7 +468,6 @@ String _formatDuration(int seconds) {
   return '$m:${s.toString().padLeft(2, '0')}';
 }
 
-// ── Platform card ─────────────────────────────────────────────────────────────
 
 class _PlatformCard extends StatelessWidget {
   final PlatformPreset preset;
@@ -582,7 +580,6 @@ class _PlatformCard extends StatelessWidget {
   }
 }
 
-// ── Savings summary card ──────────────────────────────────────────────────────
 
 class _SavingsSummaryCard extends StatelessWidget {
   final List<OptimizationRecord> records;
@@ -759,7 +756,6 @@ class _SavingsSummaryCard extends StatelessWidget {
   }
 }
 
-// ── Recent history list ───────────────────────────────────────────────────────
 
 class _RecentHistoryList extends StatelessWidget {
   final List<OptimizationRecord> records;
@@ -955,7 +951,6 @@ class ProcessingArgs {
   });
 }
 
-// ── Quality slider ────────────────────────────────────────────────────────────
 
 class _QualitySlider extends StatelessWidget {
   final int value;

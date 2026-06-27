@@ -33,17 +33,17 @@ class _ProcessingPageState extends State<ProcessingPage>
   String? _errorMsg;
 
   static const _imageSteps = [
-    'Analyzing media...',
-    'Applying smart filters...',
-    'Encoding output...',
-    'Finalizing...',
+    'Reading file...',
+    'Compressing...',
+    'Encoding JPEG...',
+    'Done',
   ];
 
   static const _videoSteps = [
-    'Analyzing video...',
-    'Transcoding to H.264...',
-    'Splitting segments...',
-    'Finalizing...',
+    'Reading video...',
+    'Transcoding H.264...',
+    'Splitting clips...',
+    'Done',
   ];
 
   List<String> get _steps =>
@@ -72,7 +72,6 @@ class _ProcessingPageState extends State<ProcessingPage>
 
     _setStep(0, 0.05);
 
-    // Video pipeline — probe → transcode → split
     if (item?.isVideo == true) {
       _setStep(0, 0.05);
       try {
@@ -141,7 +140,6 @@ class _ProcessingPageState extends State<ProcessingPage>
       return;
     }
 
-    // No item selected: skip straight to result
     if (item == null) {
       _setStep(3, 1.0);
       await Future.delayed(const Duration(milliseconds: 400));
@@ -288,7 +286,7 @@ class _ProcessingPageState extends State<ProcessingPage>
                       size: 48, color: AppColors.error),
                   const SizedBox(height: 16),
                   Text(
-                    'Something went wrong',
+                    'Processing failed',
                     style: AppTypography.outfit(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,

@@ -312,7 +312,6 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 }
 
-// ── Platform picker sheet ─────────────────────────────────────────────────────
 
 class _PlatformSheet extends StatelessWidget {
   final bool isDark;
@@ -429,7 +428,6 @@ class _PlatformSheet extends StatelessWidget {
   }
 }
 
-// ── Quality mode sheet ────────────────────────────────────────────────────────
 
 class _QualitySheet extends StatelessWidget {
   final bool isDark;
@@ -565,7 +563,6 @@ class _QualitySheet extends StatelessWidget {
   }
 }
 
-// ── Privacy policy sheet ──────────────────────────────────────────────────────
 
 class _PrivacySheet extends StatelessWidget {
   final bool isDark;
@@ -674,7 +671,6 @@ class _PrivacySection extends StatelessWidget {
   }
 }
 
-// ── App card ──────────────────────────────────────────────────────────────────
 
 class _AppCard extends StatelessWidget {
   final bool isDark;
@@ -714,7 +710,7 @@ class _AppCard extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                'Smart media optimization',
+                'Media optimization',
                 style: AppTypography.dmSans(
                   fontSize: 13,
                   color: Colors.white.withAlpha(200),
@@ -728,7 +724,6 @@ class _AppCard extends StatelessWidget {
   }
 }
 
-// ── Section label ─────────────────────────────────────────────────────────────
 
 class _SectionLabel extends StatelessWidget {
   final String label;
@@ -751,7 +746,6 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-// ── Settings card ─────────────────────────────────────────────────────────────
 
 class _SettingsCard extends StatelessWidget {
   final bool isDark;
@@ -778,7 +772,6 @@ class _SettingsCard extends StatelessWidget {
   }
 }
 
-// ── Settings tile ─────────────────────────────────────────────────────────────
 
 class _SettingsTile extends StatelessWidget {
   final bool isDark;
@@ -858,7 +851,6 @@ class _SettingsTile extends StatelessWidget {
   }
 }
 
-// ── Tile divider ──────────────────────────────────────────────────────────────
 
 class _TileDivider extends StatelessWidget {
   final bool isDark;
@@ -876,7 +868,6 @@ class _TileDivider extends StatelessWidget {
   }
 }
 
-// ── Appearance sheet ──────────────────────────────────────────────────────────
 
 class _AppearanceSheet extends StatelessWidget {
   final bool isDark;
@@ -957,7 +948,6 @@ class _AppearanceSheet extends StatelessWidget {
   }
 }
 
-// ── Grid sheet ────────────────────────────────────────────────────────────────
 
 class _GridSheet extends StatelessWidget {
   final bool isDark;
@@ -1034,7 +1024,6 @@ class _GridSheet extends StatelessWidget {
   }
 }
 
-// ── Sheet option (shared) ─────────────────────────────────────────────────────
 
 class _SheetOption extends StatelessWidget {
   final bool isDark;

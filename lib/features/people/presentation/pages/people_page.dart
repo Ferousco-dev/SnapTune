@@ -160,7 +160,6 @@ class _PeoplePageState extends State<PeoplePage> {
   }
 }
 
-// ── Idle ──────────────────────────────────────────────────────────────────────
 
 class _IdleBody extends StatelessWidget {
   final bool isDark;
@@ -238,7 +237,6 @@ class _IdleBody extends StatelessWidget {
   }
 }
 
-// ── Scanning ──────────────────────────────────────────────────────────────────
 
 class _ScanningBody extends StatelessWidget {
   final int processed;
@@ -310,7 +308,6 @@ class _ScanningBody extends StatelessWidget {
   }
 }
 
-// ── Results ───────────────────────────────────────────────────────────────────
 
 class _ResultsBody extends StatelessWidget {
   final List<MediaItem> solo;

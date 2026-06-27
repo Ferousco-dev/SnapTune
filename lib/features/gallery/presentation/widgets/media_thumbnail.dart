@@ -69,7 +69,6 @@ class MediaThumbnail extends StatelessWidget {
             ),
           ),
 
-          // Empty circle shown when in select mode but this item is not selected
           if (isSelecting && !isSelected)
             Positioned(
               top: 6,
