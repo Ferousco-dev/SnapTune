@@ -52,6 +52,9 @@ dependencies:
   # ML: on-device face detection (no API key, works offline)
   google_mlkit_face_detection: ^0.11.0
 
+  # Video transcoding — H.264, VFR→CFR, status splitter (min-gpl = ~20MB, includes libx264)
+  ffmpeg_kit_flutter_min_gpl: ^6.0.3
+
   # Utilities
   intl: ^0.20.2
   mime: ^2.0.0
