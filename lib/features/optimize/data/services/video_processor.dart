@@ -42,7 +42,7 @@ class VideoMetadata {
   bool get videoCodecOk => videoCodec == 'h264';
   bool get audioCodecOk => audioCodec == 'aac';
   bool get resolutionOk => longestSide <= 1280;
-  bool get fpsOk => fps <= 30.0 && !isVfr;
+  bool get fpsOk => fps <= 60.0 && !isVfr;
   bool get videoBitrateOk => videoBitrateBps > 0 && videoBitrateBps <= 1_800_000;
   bool get audioBitrateOk => audioBitrateBps <= 160_000;
   bool get audioSampleRateOk =>
@@ -91,7 +91,8 @@ class _WhatsAppOptimizer {
   // Targets sit just below WhatsApp's re-encode thresholds (observed behavior)
   static const int _maxLongSide = 1280;
   static const int _targetVideoBps = 1_500_000; // 1.5 Mbps
-  static const int _maxFps = 30;
+  static const int _maxFps = 60;
+  static const int _defaultFps = 30; // fallback when source fps undetectable
 
   OptimizationPlan analyze(VideoMetadata m) {
     if (m.isWhatsAppReady) {
@@ -99,7 +100,7 @@ class _WhatsAppOptimizer {
         bypass: true,
         targetWidth: m.width,
         targetHeight: m.height,
-        targetFps: m.fps.round(),
+        targetFps: m.fps > 0 ? m.fps.round().clamp(1, _maxFps) : _defaultFps,
         targetVideoBitrateBps: m.videoBitrateBps,
         reEncodeVideo: false,
         reEncodeAudio: false,
@@ -127,8 +128,10 @@ class _WhatsAppOptimizer {
       reasons.add('Resize ${m.width}×${m.height} → $tW×$tH');
     }
 
-    // FPS
-    int tFps = m.fps.round().clamp(1, _maxFps);
+    // FPS: preserve source up to 60fps; fall back to 30fps if undetectable
+    int tFps = m.fps > 0
+        ? m.fps.round().clamp(1, _maxFps)
+        : _defaultFps;
     if (m.fps > _maxFps) {
       reasons.add('Reduce fps ${m.fps.toStringAsFixed(1)} → $_maxFps');
     }
@@ -378,9 +381,9 @@ class VideoProcessor {
         // Hard cap keeps us under WhatsApp's re-encode threshold
         '-maxrate ${(plan.targetVideoBitrateBps / 1000).round()}k',
         '-bufsize ${(plan.targetVideoBitrateBps * 2 / 1000).round()}k',
-        // 2-second GOP — improves seeking without hurting compression much
-        '-g ${plan.targetFps * 2}',
-        '-keyint_min ${plan.targetFps}',
+        // 1-second GOP — matches LightCompressor's verified I_FRAME_INTERVAL
+        '-g ${plan.targetFps}',
+        '-keyint_min ${plan.targetFps ~/ 2}',
         if (vf.isNotEmpty) '-vf "$vf"',
         '-vsync cfr',
       ]);
