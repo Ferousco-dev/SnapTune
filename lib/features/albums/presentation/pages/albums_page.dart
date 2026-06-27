@@ -149,6 +149,14 @@ class _AlbumsPageState extends State<AlbumsPage> {
             letterSpacing: -0.3,
           ),
         ),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.menu_rounded,
+                color: theme.colorScheme.onSurface),
+            onPressed: () => context.push(Routes.settings),
+          ),
+          const SizedBox(width: 4),
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
