@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:photo_manager/photo_manager.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../../core/services/grid_columns_notifier.dart';
 import '../../../../core/services/theme_notifier.dart';
@@ -21,11 +22,13 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   String _defaultPlatformId = 'whatsapp';
   String _qualityMode = 'Balanced';
+  String _version = '';
 
   @override
   void initState() {
     super.initState();
     _loadPrefs();
+    _loadVersion();
   }
 
   Future<void> _loadPrefs() async {
@@ -36,6 +39,12 @@ class _SettingsPageState extends State<SettingsPage> {
           prefs.getString('default_platform') ?? 'whatsapp';
       _qualityMode = prefs.getString('quality_mode') ?? 'Balanced';
     });
+  }
+
+  Future<void> _loadVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    if (!mounted) return;
+    setState(() => _version = info.version);
   }
 
   Future<void> _setDefaultPlatform(String id) async {
@@ -143,16 +152,10 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _sendFeedback() async {
-    await Share.share(
-      'Hi SnapTune team,\n\nI wanted to share some feedback:\n\n[Your message here]',
-      subject: 'SnapTune Feedback',
-    );
-  }
-
-  Future<void> _rateApp() async {
-    await Share.share(
-      'Check out SnapTune — a beautiful, on-device gallery and media optimizer!\nhttps://github.com/Ferousco-dev/SnapTune',
-    );
+    final uri = Uri.parse('https://wa.me/2349072182889');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 
   @override
@@ -275,19 +278,10 @@ class _SettingsPageState extends State<SettingsPage> {
               children: [
                 _SettingsTile(
                   isDark: isDark,
-                  icon: Icons.star_outline_rounded,
-                  iconColor: AppColors.coral,
-                  title: 'Rate SnapTune',
-                  subtitle: 'Share the love',
-                  onTap: _rateApp,
-                ),
-                _TileDivider(isDark: isDark),
-                _SettingsTile(
-                  isDark: isDark,
                   icon: Icons.chat_bubble_outline_rounded,
                   iconColor: AppColors.violet,
                   title: 'Send feedback',
-                  subtitle: 'Tell us what you think',
+                  subtitle: 'Chat with us on WhatsApp',
                   onTap: _sendFeedback,
                 ),
                 _TileDivider(isDark: isDark),
@@ -306,7 +300,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   icon: Icons.info_outline_rounded,
                   iconColor: isDark ? AppColors.darkMuted : AppColors.muted,
                   title: 'Version',
-                  subtitle: '1.0.0',
+                  subtitle: _version.isEmpty ? '...' : _version,
                   onTap: null,
                 ),
               ],
