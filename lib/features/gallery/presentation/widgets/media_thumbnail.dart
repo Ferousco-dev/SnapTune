@@ -26,11 +26,12 @@ class MediaThumbnail extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       onLongPress: onLongPress,
-      child: Stack(
+      child: RepaintBoundary(
+        child: Stack(
         fit: StackFit.expand,
         children: [
-          // Thumbnail image
-          _ThumbnailImage(id: item.id),
+          // Stable key prevents State disposal when selection changes
+          _ThumbnailImage(key: ValueKey(item.id), id: item.id),
 
           // Video overlay (duration + play icon)
           if (item.isVideo) _VideoOverlay(duration: item.duration),
@@ -84,6 +85,7 @@ class MediaThumbnail extends StatelessWidget {
               ),
             ),
         ],
+        ),
       ),
     );
   }
@@ -91,7 +93,7 @@ class MediaThumbnail extends StatelessWidget {
 
 class _ThumbnailImage extends StatefulWidget {
   final String id;
-  const _ThumbnailImage({required this.id});
+  const _ThumbnailImage({super.key, required this.id});
 
   @override
   State<_ThumbnailImage> createState() => _ThumbnailImageState();
@@ -110,8 +112,10 @@ class _ThumbnailImageState extends State<_ThumbnailImage> {
   Future<void> _load() async {
     final asset = await AssetEntity.fromId(widget.id);
     if (asset == null || !mounted) return;
-    final bytes =
-        await asset.thumbnailDataWithSize(const ThumbnailSize(300, 300));
+    final bytes = await asset.thumbnailDataWithSize(
+      const ThumbnailSize(200, 200),
+      quality: 85,
+    );
     if (!mounted) return;
     setState(() {
       _bytes = bytes;
@@ -135,7 +139,13 @@ class _ThumbnailImageState extends State<_ThumbnailImage> {
       );
     }
 
-    return Image.memory(_bytes!, fit: BoxFit.cover, gaplessPlayback: true);
+    return Image.memory(
+      _bytes!,
+      fit: BoxFit.cover,
+      gaplessPlayback: true,
+      cacheWidth: 200,
+      cacheHeight: 200,
+    );
   }
 }
 
