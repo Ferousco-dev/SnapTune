@@ -99,13 +99,23 @@ class _ThumbnailImage extends StatefulWidget {
 }
 
 class _ThumbnailImageState extends State<_ThumbnailImage> {
+  // Shared across all instances — survives widget disposal/recreation on scroll
+  static final Map<String, Uint8List> _cache = {};
+  static const _cacheLimit = 800;
+
   Uint8List? _bytes;
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    final hit = _cache[widget.id];
+    if (hit != null) {
+      _bytes = hit;
+      _loading = false;
+    } else {
+      _load();
+    }
   }
 
   Future<void> _load() async {
@@ -115,6 +125,10 @@ class _ThumbnailImageState extends State<_ThumbnailImage> {
       const ThumbnailSize(200, 200),
       quality: 85,
     );
+    if (bytes != null) {
+      if (_cache.length >= _cacheLimit) _cache.remove(_cache.keys.first);
+      _cache[widget.id] = bytes;
+    }
     if (!mounted) return;
     setState(() {
       _bytes = bytes;
