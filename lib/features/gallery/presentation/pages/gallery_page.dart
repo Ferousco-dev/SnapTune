@@ -336,6 +336,7 @@ class _GalleryViewState extends State<_GalleryView> {
                         isDark: isDark,
                         onSearch: () => _openSearch(state.items),
                         onMore: () => _showMoreMenu(context, state.items),
+                        onSettings: () => context.push(Routes.settings),
                         sortNewest: _sortNewest,
                         isSelecting: _isSelecting,
                         selectedCount: _selectedIds.length,
@@ -396,6 +397,7 @@ class _AppBar extends StatelessWidget {
   final bool sortNewest;
   final VoidCallback onSearch;
   final VoidCallback onMore;
+  final VoidCallback onSettings;
   final bool isSelecting;
   final int selectedCount;
   final VoidCallback onCancelSelect;
@@ -407,6 +409,7 @@ class _AppBar extends StatelessWidget {
     required this.isDark,
     required this.onSearch,
     required this.onMore,
+    required this.onSettings,
     required this.sortNewest,
     required this.isSelecting,
     required this.selectedCount,
@@ -497,9 +500,9 @@ class _AppBar extends StatelessWidget {
                 onPressed: onSearch,
               ),
               IconButton(
-                icon: Icon(Icons.more_vert_rounded,
+                icon: Icon(Icons.menu_rounded,
                     color: Theme.of(context).colorScheme.onSurface),
-                onPressed: onMore,
+                onPressed: onSettings,
               ),
               const SizedBox(width: 4),
             ],
