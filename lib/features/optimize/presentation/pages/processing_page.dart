@@ -104,19 +104,40 @@ class _ProcessingPageState extends State<ProcessingPage>
     _setStep(1, 0.25);
 
     Uint8List? outputBytes;
+    bool bypassed = false;
     try {
       final file = await asset.file;
       if (file != null) {
-        // flutter_image_compress uses native iOS/Android APIs:
-        // handles HEIC/HEIF/ProRAW natively, hardware-accelerated, no isolate needed
-        outputBytes = await FlutterImageCompress.compressWithFile(
-          file.absolute.path,
-          minWidth: preset.maxWidth,
-          minHeight: preset.maxHeight,
-          quality: preset.jpegQuality,
-          format: CompressFormat.jpeg,
-          keepExif: false,
-        );
+        // Bypass: already-JPEG within target dimensions and below ~quality-80 threshold.
+        // ~380 KB/megapixel is the inflection point where re-encoding adds size, not saves it.
+        final mimeType = asset.mimeType ?? '';
+        final isJpeg = mimeType == 'image/jpeg' || mimeType == 'image/jpg';
+        final fitsBox = asset.width <= preset.maxWidth && asset.height <= preset.maxHeight;
+        final megapixels = (asset.width * asset.height) / 1_000_000.0;
+        final alreadyConditioned = isJpeg &&
+            fitsBox &&
+            megapixels > 0 &&
+            (originalSize / megapixels) < 380_000;
+
+        if (alreadyConditioned) {
+          outputBytes = await file.readAsBytes();
+          bypassed = true;
+        } else {
+          // Native iOS/Android compression: handles HEIC/HEIF/ProRAW, hardware-accelerated
+          outputBytes = await FlutterImageCompress.compressWithFile(
+            file.absolute.path,
+            minWidth: preset.maxWidth,
+            minHeight: preset.maxHeight,
+            quality: preset.jpegQuality,
+            format: CompressFormat.jpeg,
+            keepExif: false,
+          );
+          // Anti-bloat guard: serve original if compression produced a larger file
+          if (outputBytes != null && outputBytes.length >= originalSize) {
+            outputBytes = await file.readAsBytes();
+            bypassed = true;
+          }
+        }
       }
     } catch (e) {
       if (!mounted) return;
@@ -140,6 +161,7 @@ class _ProcessingPageState extends State<ProcessingPage>
         item: item,
         outputBytes: outputBytes,
         originalSizeBytes: originalSize,
+        bypassed: bypassed,
       ),
     );
   }
