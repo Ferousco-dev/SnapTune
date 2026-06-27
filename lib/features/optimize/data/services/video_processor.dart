@@ -439,8 +439,9 @@ class VideoProcessor {
       );
     }
 
-    if (meta.fps > 30 || meta.isVfr) {
-      filters.add('fps=fps=30');
+    // Cap at 60fps (WhatsApp limit) or convert VFR; don't touch CFR ≤60fps
+    if (meta.fps > 60 || meta.isVfr) {
+      filters.add('fps=fps=${plan.targetFps}');
     }
 
     return filters.join(',');
