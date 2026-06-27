@@ -68,6 +68,17 @@ final GoRouter appRouter = GoRouter(
       path: Routes.favorites,
       pageBuilder: (_, state) => _fade(state, const FavoritesPage()),
     ),
+    GoRoute(
+      path: Routes.settings,
+      pageBuilder: (_, state) => _fade(state, const SettingsPage()),
+    ),
+    GoRoute(
+      path: Routes.optimize,
+      pageBuilder: (_, state) {
+        final args = state.extra as OptimizeArgs?;
+        return _fade(state, OptimizePage(args: args));
+      },
+    ),
     ShellRoute(
       pageBuilder: (_, _, child) => NoTransitionPage(child: AppShell(child: child)),
       routes: [
@@ -78,17 +89,6 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: Routes.albums,
           pageBuilder: (_, state) => _fadeShell(state, const AlbumsPage()),
-        ),
-        GoRoute(
-          path: Routes.optimize,
-          pageBuilder: (_, state) {
-            final args = state.extra as OptimizeArgs?;
-            return _fadeShell(state, OptimizePage(args: args));
-          },
-        ),
-        GoRoute(
-          path: Routes.settings,
-          pageBuilder: (_, state) => _fadeShell(state, const SettingsPage()),
         ),
       ],
     ),
