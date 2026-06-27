@@ -177,11 +177,13 @@ class _ProcessingPageState extends State<ProcessingPage>
           bypassed = true;
         } else {
           // Native iOS/Android compression: handles HEIC/HEIF/ProRAW, hardware-accelerated
+          final effectiveQuality =
+              widget.args?.qualityOverride ?? preset.jpegQuality;
           outputBytes = await FlutterImageCompress.compressWithFile(
             file.absolute.path,
             minWidth: preset.maxWidth,
             minHeight: preset.maxHeight,
-            quality: preset.jpegQuality,
+            quality: effectiveQuality,
             format: CompressFormat.jpeg,
             keepExif: false,
           );
