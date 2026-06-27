@@ -9,10 +9,8 @@ class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.child});
 
   static const _tabs = [
-    _NavTab(label: 'Gallery',  icon: Icons.photo_library_outlined,  activeIcon: Icons.photo_library_rounded,  path: Routes.gallery),
-    _NavTab(label: 'Albums',   icon: Icons.folder_outlined,          activeIcon: Icons.folder_rounded,         path: Routes.albums),
-    _NavTab(label: 'Optimize', icon: Icons.auto_fix_high_outlined,   activeIcon: Icons.auto_fix_high_rounded,  path: Routes.optimize),
-    _NavTab(label: 'Settings', icon: Icons.settings_outlined,        activeIcon: Icons.settings_rounded,       path: Routes.settings),
+    _NavTab(label: 'Gallery', icon: Icons.photo_library_outlined, activeIcon: Icons.photo_library_rounded, path: Routes.gallery),
+    _NavTab(label: 'Albums',  icon: Icons.folder_outlined,         activeIcon: Icons.folder_rounded,        path: Routes.albums),
   ];
 
   @override
