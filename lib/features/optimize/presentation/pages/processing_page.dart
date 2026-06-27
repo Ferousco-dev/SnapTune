@@ -4,10 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:go_router/go_router.dart';
 import 'package:photo_manager/photo_manager.dart';
+import 'package:uuid/uuid.dart';
 import '../../../../core/router/routes.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../data/services/history_service.dart';
 import '../../data/services/video_processor.dart';
+import '../../domain/entities/optimization_record.dart';
 import '../../domain/entities/platform_preset.dart';
 import 'optimize_page.dart';
 import 'result_page.dart';
@@ -106,6 +109,21 @@ class _ProcessingPageState extends State<ProcessingPage>
         await Future.delayed(const Duration(milliseconds: 300));
         if (!mounted) return;
 
+        await HistoryService.instance.save(OptimizationRecord(
+          id: const Uuid().v4(),
+          timestampMs: DateTime.now().millisecondsSinceEpoch,
+          presetId: preset.id.name,
+          presetName: preset.name,
+          filename: item.title,
+          originalSizeBytes: result.originalSizeBytes,
+          outputSizeBytes: result.outputSizeBytes,
+          isVideo: true,
+          savedOutputPath:
+              result.outputPaths.isNotEmpty ? result.outputPaths.first : null,
+          clipCount: result.outputPaths.length,
+        ));
+
+        if (!mounted) return;
         context.pushReplacement(
           Routes.result,
           extra: ResultArgs(
@@ -207,6 +225,21 @@ class _ProcessingPageState extends State<ProcessingPage>
     if (!mounted) return;
     _setStep(3, 1.0);
     await Future.delayed(const Duration(milliseconds: 400));
+
+    if (!mounted) return;
+
+    if (originalSize > 0) {
+      await HistoryService.instance.save(OptimizationRecord(
+        id: const Uuid().v4(),
+        timestampMs: DateTime.now().millisecondsSinceEpoch,
+        presetId: preset.id.name,
+        presetName: preset.name,
+        filename: item.title,
+        originalSizeBytes: originalSize,
+        outputSizeBytes: outputBytes?.length ?? originalSize,
+        isVideo: false,
+      ));
+    }
 
     if (!mounted) return;
     context.pushReplacement(
