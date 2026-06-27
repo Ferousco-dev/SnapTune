@@ -47,6 +47,9 @@ class _ResultPageState extends State<ResultPage>
   bool _saving = false;
   final _shareButtonKey = GlobalKey();
 
+  // Before/After slider — only used for image results
+  Uint8List? _originalThumb;
+
   @override
   void initState() {
     super.initState();
@@ -63,6 +66,22 @@ class _ResultPageState extends State<ResultPage>
       curve: const Interval(0.0, 0.5, curve: Curves.easeOut),
     );
     _entryController.forward();
+    _loadOriginalThumb();
+  }
+
+  Future<void> _loadOriginalThumb() async {
+    final item = widget.args?.item;
+    if (item == null || widget.args?.outputBytes == null) return;
+    if (widget.args?.videoPaths != null) return; // video — no slider
+    try {
+      final asset = await AssetEntity.fromId(item.id);
+      final thumb = await asset?.thumbnailDataWithSize(
+        const ThumbnailSize.square(800),
+        format: ThumbnailFormat.jpeg,
+        quality: 95,
+      );
+      if (thumb != null && mounted) setState(() => _originalThumb = thumb);
+    } catch (_) {}
   }
 
   @override
@@ -203,6 +222,10 @@ class _ResultPageState extends State<ResultPage>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final preset = widget.args?.preset ?? PlatformPreset.all.first;
 
+    final showSlider = !_isVideo &&
+        _originalThumb != null &&
+        widget.args?.outputBytes != null;
+
     return Scaffold(
       backgroundColor:
           isDark ? AppColors.darkBackground : AppColors.background,
@@ -232,18 +255,39 @@ class _ResultPageState extends State<ResultPage>
               ),
             ),
 
-            const Spacer(flex: 2),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
 
-            // Success illustration
+            // Before/After slider — image results only
+            if (showSlider) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                child: FadeTransition(
+                  opacity: _fadeAnim,
+                  child: _BeforeAfterSlider(
+                    before: _originalThumb!,
+                    after: widget.args!.outputBytes!,
+                    isDark: isDark,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ] else ...[
+              const SizedBox(height: 24),
+            ],
+
+            // Success illustration — smaller when slider is shown
             FadeTransition(
               opacity: _fadeAnim,
               child: ScaleTransition(
                 scale: _scaleAnim,
-                child: _SuccessIcon(preset: preset),
+                child: _SuccessIcon(preset: preset, compact: showSlider),
               ),
             ),
 
-            const SizedBox(height: 28),
+            SizedBox(height: showSlider ? 16 : 28),
 
             // Title
             FadeTransition(
@@ -441,13 +485,17 @@ class _ResultPageState extends State<ResultPage>
               ),
             ],
 
-            const Spacer(flex: 3),
+                    const SizedBox(height: 32),
+                  ], // end inner Column children
+                ), // end inner Column
+              ), // end SingleChildScrollView
+            ), // end Expanded
 
-            // Action buttons
+            // Action buttons — pinned outside scroll so always visible
             Padding(
               padding: EdgeInsets.fromLTRB(
                 AppSpacing.lg,
-                0,
+                8,
                 AppSpacing.lg,
                 MediaQuery.of(context).padding.bottom + AppSpacing.md,
               ),
@@ -534,9 +582,7 @@ class _ResultPageState extends State<ResultPage>
                               height: 18,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurface,
+                                color: Theme.of(context).colorScheme.onSurface,
                               ),
                             )
                           else
@@ -570,36 +616,43 @@ class _ResultPageState extends State<ResultPage>
 
 class _SuccessIcon extends StatelessWidget {
   final PlatformPreset preset;
-  const _SuccessIcon({required this.preset});
+  final bool compact;
+  const _SuccessIcon({required this.preset, this.compact = false});
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final size = compact ? 72.0 : 120.0;
+    final iconSize = compact ? 36.0 : 60.0;
+    final radius = compact ? 22.0 : 36.0;
+    final badgeSize = compact ? 28.0 : 42.0;
+    final badgeIconSize = compact ? 13.0 : 20.0;
+
     return Stack(
       clipBehavior: Clip.none,
       children: [
         Container(
-          width: 120,
-          height: 120,
+          width: size,
+          height: size,
           decoration: BoxDecoration(
             gradient: AppColors.brandGradient,
-            borderRadius: BorderRadius.circular(36),
+            borderRadius: BorderRadius.circular(radius),
             boxShadow: [
               BoxShadow(
                 color: AppColors.primary.withAlpha(80),
-                blurRadius: 32,
-                offset: const Offset(0, 12),
+                blurRadius: compact ? 16 : 32,
+                offset: const Offset(0, 8),
               ),
             ],
           ),
-          child: const Icon(Icons.check_rounded, color: Colors.white, size: 60),
+          child: Icon(Icons.check_rounded, color: Colors.white, size: iconSize),
         ),
         Positioned(
-          bottom: -10,
-          right: -10,
+          bottom: -8,
+          right: -8,
           child: Container(
-            width: 42,
-            height: 42,
+            width: badgeSize,
+            height: badgeSize,
             decoration: BoxDecoration(
               color: preset.color.withAlpha(isDark ? 50 : 30),
               shape: BoxShape.circle,
@@ -608,7 +661,7 @@ class _SuccessIcon extends StatelessWidget {
                 width: 3,
               ),
             ),
-            child: Icon(preset.icon, color: preset.color, size: 20),
+            child: Icon(preset.icon, color: preset.color, size: badgeIconSize),
           ),
         ),
       ],
@@ -674,6 +727,157 @@ class _StatCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Before / After slider ─────────────────────────────────────────────────────
+
+class _BeforeAfterSlider extends StatefulWidget {
+  final Uint8List before;
+  final Uint8List after;
+  final bool isDark;
+
+  const _BeforeAfterSlider({
+    required this.before,
+    required this.after,
+    required this.isDark,
+  });
+
+  @override
+  State<_BeforeAfterSlider> createState() => _BeforeAfterSliderState();
+}
+
+class _BeforeAfterSliderState extends State<_BeforeAfterSlider> {
+  double _split = 0.5;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth;
+          const height = 260.0;
+
+          return GestureDetector(
+            onHorizontalDragUpdate: (details) {
+              final box = context.findRenderObject() as RenderBox?;
+              if (box == null) return;
+              final local = box.globalToLocal(details.globalPosition);
+              setState(() {
+                _split = (local.dx / box.size.width).clamp(0.05, 0.95);
+              });
+            },
+            child: SizedBox(
+              width: width,
+              height: height,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // Before — full width underneath
+                  Image.memory(
+                    widget.before,
+                    fit: BoxFit.cover,
+                    gaplessPlayback: true,
+                  ),
+
+                  // After — clipped to right of divider
+                  ClipRect(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      widthFactor: 1.0 - _split,
+                      child: Image.memory(
+                        widget.after,
+                        fit: BoxFit.cover,
+                        width: width,
+                        height: height,
+                        gaplessPlayback: true,
+                      ),
+                    ),
+                  ),
+
+                  // Divider line
+                  Positioned(
+                    left: width * _split - 1,
+                    top: 0,
+                    bottom: 0,
+                    child: Container(
+                      width: 2,
+                      color: Colors.white,
+                    ),
+                  ),
+
+                  // Drag handle
+                  Positioned(
+                    left: width * _split - 20,
+                    top: height / 2 - 20,
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withAlpha(60),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.unfold_more_rounded,
+                        color: Colors.black87,
+                        size: 22,
+                      ),
+                    ),
+                  ),
+
+                  // BEFORE label
+                  Positioned(
+                    top: 12,
+                    left: 12,
+                    child: _SliderLabel(text: 'BEFORE'),
+                  ),
+
+                  // AFTER label
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: _SliderLabel(text: 'AFTER'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _SliderLabel extends StatelessWidget {
+  final String text;
+  const _SliderLabel({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.black.withAlpha(120),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.8,
         ),
       ),
     );
