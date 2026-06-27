@@ -43,8 +43,9 @@ class VideoMetadata {
   bool get audioCodecOk => audioCodec == 'aac';
   bool get resolutionOk => longestSide <= 1280;
   bool get fpsOk => fps <= 60.0 && !isVfr;
-  bool get videoBitrateOk => videoBitrateBps > 0 && videoBitrateBps <= 1_800_000;
-  bool get audioBitrateOk => audioBitrateBps <= 160_000;
+  // 0 = undetectable (common on WhatsApp-received files) — treat as OK
+  bool get videoBitrateOk => videoBitrateBps == 0 || videoBitrateBps <= 1_800_000;
+  bool get audioBitrateOk => audioBitrateBps == 0 || audioBitrateBps <= 160_000;
   bool get audioSampleRateOk =>
       audioSampleRate == 44100 || audioSampleRate == 48000;
 
@@ -325,7 +326,13 @@ class VideoProcessor {
       final rFps = vProps?['r_frame_rate'] as String?;
       final avgFps = vProps?['avg_frame_rate'] as String?;
       final fps = _parseFrac(avgFps ?? rFps ?? '30/1');
-      final isVfr = rFps != null && avgFps != null && rFps != avgFps;
+      // Only flag VFR when the difference is >5% — avoids false positives on
+      // WhatsApp-received files where metadata has minor rounding differences
+      final rFpsVal = _parseFrac(rFps ?? '0');
+      final avgFpsVal = _parseFrac(avgFps ?? '0');
+      final isVfr = rFpsVal > 0 &&
+          avgFpsVal > 0 &&
+          (rFpsVal - avgFpsVal).abs() / rFpsVal > 0.05;
 
       // Stream-level bitrate is more accurate; fall back to container / estimate
       final vBps = int.tryParse(videoStream.getBitrate() ?? '0') ?? 0;
@@ -378,14 +385,13 @@ class VideoProcessor {
         '-pix_fmt yuv420p',
         '-preset fast',
         '-crf 23',
-        // Hard cap keeps us under WhatsApp's re-encode threshold
         '-maxrate ${(plan.targetVideoBitrateBps / 1000).round()}k',
         '-bufsize ${(plan.targetVideoBitrateBps * 2 / 1000).round()}k',
-        // 1-second GOP — matches LightCompressor's verified I_FRAME_INTERVAL
         '-g ${plan.targetFps}',
         '-keyint_min ${plan.targetFps ~/ 2}',
         if (vf.isNotEmpty) '-vf "$vf"',
-        '-vsync cfr',
+        // 29.97fps matches WhatsApp's internal target (verified from PureStatus/ClearStatus)
+        '-r 29.97',
       ]);
     } else {
       parts.add('-c:v copy');
@@ -406,6 +412,8 @@ class VideoProcessor {
     parts.addAll([
       '-movflags +faststart',
       '-map_metadata -1',
+      '-threads 0',
+      '-f mp4',
       '-y "$outputPath"',
     ]);
 
