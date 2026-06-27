@@ -11,4 +11,5 @@ abstract final class Routes {
   static const String people = '/people';
   static const String processing = '/processing';
   static const String result = '/result';
+  static const String history = '/history';
 }
