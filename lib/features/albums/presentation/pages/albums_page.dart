@@ -154,6 +154,14 @@ class _AlbumsPageState extends State<AlbumsPage> {
           ? const Center(child: CircularProgressIndicator())
           : CustomScrollView(
               slivers: [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.md, AppSpacing.md, AppSpacing.md, 0,
+                    ),
+                    child: _FavoritesShortcut(isDark: isDark),
+                  ),
+                ),
                 if (_albums.isEmpty)
                   SliverFillRemaining(
                     child: _EmptyAlbumsState(isDark: isDark),
@@ -476,6 +484,67 @@ class _AlbumCardState extends State<_AlbumCard> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _FavoritesShortcut extends StatelessWidget {
+  final bool isDark;
+  const _FavoritesShortcut({required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => context.push(Routes.favorites),
+      child: Container(
+        height: 62,
+        margin: const EdgeInsets.only(bottom: AppSpacing.md),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          gradient: AppColors.brandGradient,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withAlpha(isDark ? 50 : 40),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: Colors.white.withAlpha(35),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.favorite_rounded,
+                color: Colors.white,
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                'Favorites',
+                style: AppTypography.dmSans(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: Colors.white,
+              size: 22,
+            ),
+          ],
+        ),
       ),
     );
   }
