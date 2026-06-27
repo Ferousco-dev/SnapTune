@@ -25,11 +25,15 @@ class OptimizePage extends StatefulWidget {
 
 class _OptimizePageState extends State<OptimizePage> {
   PlatformId _selected = PlatformId.whatsapp;
+  int _quality = 88; // mirrors the default preset quality, user-adjustable
 
   // Photo picker state — only used when args == null (tab opened directly)
   List<AssetEntity> _recentAssets = [];
   AssetEntity? _pickedAsset;
   bool _loadingAssets = false;
+
+  PlatformPreset get _activePreset =>
+      PlatformPreset.all.firstWhere((p) => p.id == _selected);
 
   bool get _hasPreSelected => widget.args != null;
 
@@ -44,6 +48,7 @@ class _OptimizePageState extends State<OptimizePage> {
   @override
   void initState() {
     super.initState();
+    _quality = _activePreset.jpegQuality;
     if (!_hasPreSelected) _loadRecents();
   }
 
@@ -66,10 +71,13 @@ class _OptimizePageState extends State<OptimizePage> {
 
   void _startOptimization() {
     if (!_canStart) return;
-    final preset = PlatformPreset.all.firstWhere((p) => p.id == _selected);
     context.push(
       Routes.processing,
-      extra: ProcessingArgs(item: _effectiveItem, preset: preset),
+      extra: ProcessingArgs(
+        item: _effectiveItem,
+        preset: _activePreset,
+        qualityOverride: _quality,
+      ),
     );
   }
 
@@ -144,8 +152,21 @@ class _OptimizePageState extends State<OptimizePage> {
                     preset: preset,
                     isSelected: _selected == preset.id,
                     isDark: isDark,
-                    onTap: () => setState(() => _selected = preset.id),
+                    onTap: () => setState(() {
+                      _selected = preset.id;
+                      _quality = preset.jpegQuality; // reset to platform default
+                    }),
                   ),
+                ),
+
+                const SizedBox(height: AppSpacing.md),
+
+                // Quality slider
+                _QualitySlider(
+                  value: _quality,
+                  defaultValue: _activePreset.jpegQuality,
+                  isDark: isDark,
+                  onChanged: (v) => setState(() => _quality = v),
                 ),
 
                 const SizedBox(height: AppSpacing.md),
@@ -531,5 +552,165 @@ class _PlatformCard extends StatelessWidget {
 class ProcessingArgs {
   final MediaItem? item;
   final PlatformPreset preset;
-  const ProcessingArgs({required this.item, required this.preset});
+  final int? qualityOverride; // user-adjusted quality, overrides preset.jpegQuality
+  const ProcessingArgs({
+    required this.item,
+    required this.preset,
+    this.qualityOverride,
+  });
+}
+
+// ── Quality slider ────────────────────────────────────────────────────────────
+
+class _QualitySlider extends StatelessWidget {
+  final int value;
+  final int defaultValue;
+  final bool isDark;
+  final ValueChanged<int> onChanged;
+
+  const _QualitySlider({
+    required this.value,
+    required this.defaultValue,
+    required this.isDark,
+    required this.onChanged,
+  });
+
+  String get _label {
+    if (value <= 72) return 'Smaller file';
+    if (value <= 84) return 'Balanced';
+    if (value <= 92) return 'High quality';
+    return 'Maximum';
+  }
+
+  Color get _labelColor {
+    if (value <= 72) return const Color(0xFFFF9500);
+    if (value <= 84) return const Color(0xFF34C759);
+    if (value <= 92) return AppColors.primary;
+    return const Color(0xFF7B61FF);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isModified = value != defaultValue;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurface : AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? AppColors.darkOutline : AppColors.outline,
+          width: 0.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Quality',
+                style: AppTypography.dmSans(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: isDark
+                      ? AppColors.darkOnSurfaceVariant
+                      : AppColors.onSurfaceVariant,
+                ),
+              ),
+              const Spacer(),
+              // Quality badge
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: _labelColor.withAlpha(isDark ? 40 : 25),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  _label,
+                  style: AppTypography.dmSans(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: _labelColor,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Numeric value
+              Text(
+                '$value',
+                style: AppTypography.outfit(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: isDark
+                      ? AppColors.darkOnSurface
+                      : AppColors.onSurface,
+                ),
+              ),
+              // Reset button — only visible when modified
+              if (isModified) ...[
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: () => onChanged(defaultValue),
+                  child: Text(
+                    'Reset',
+                    style: AppTypography.dmSans(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 3,
+              thumbShape:
+                  const RoundSliderThumbShape(enabledThumbRadius: 8),
+              overlayShape:
+                  const RoundSliderOverlayShape(overlayRadius: 18),
+              activeTrackColor: AppColors.primary,
+              inactiveTrackColor:
+                  isDark ? AppColors.darkSurfaceVariant : AppColors.surfaceVariant,
+              thumbColor: AppColors.primary,
+              overlayColor: AppColors.primary.withAlpha(30),
+            ),
+            child: Slider(
+              min: 60,
+              max: 100,
+              divisions: 40,
+              value: value.toDouble(),
+              onChanged: (v) => onChanged(v.round()),
+            ),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Smaller file',
+                style: AppTypography.dmSans(
+                  fontSize: 10,
+                  color: isDark
+                      ? AppColors.darkMuted
+                      : AppColors.muted,
+                ),
+              ),
+              Text(
+                'Sharper detail',
+                style: AppTypography.dmSans(
+                  fontSize: 10,
+                  color: isDark
+                      ? AppColors.darkMuted
+                      : AppColors.muted,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
