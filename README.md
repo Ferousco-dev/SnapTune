@@ -55,6 +55,4 @@ Material 3 · Material You · Light & Dark theme
 
 ---
 
-## License
 
-MIT
