@@ -67,7 +67,10 @@ class _FavoritesPageState extends State<FavoritesPage> {
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: theme.scaffoldBackgroundColor,
-        automaticallyImplyLeading: false,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+          onPressed: () => context.pop(),
+        ),
         title: Text(
           'Favorites',
           style: AppTypography.outfit(
