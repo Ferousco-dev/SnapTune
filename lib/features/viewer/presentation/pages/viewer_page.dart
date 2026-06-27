@@ -45,6 +45,14 @@ class _ViewerPageState extends State<ViewerPage> {
     _pageController = PageController(initialPage: widget.args.startIndex);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     sl<LikedIdsNotifier>().addListener(_onLikesChanged);
+    _preloadAdjacent(widget.args.startIndex);
+  }
+
+  void _preloadAdjacent(int index) {
+    for (final i in [index - 1, index, index + 1]) {
+      if (i < 0 || i >= _items.length || _items[i].isVideo) continue;
+      _ViewerPhotoCache.preload(_items[i].id);
+    }
   }
 
   void _onLikesChanged() => setState(() {});
@@ -127,10 +135,13 @@ class _ViewerPageState extends State<ViewerPage> {
                         ? const NeverScrollableScrollPhysics()
                         : null,
                     itemCount: _items.length,
-                    onPageChanged: (i) => setState(() {
-                      _currentIndex = i;
-                      _photoZoomed = false;
-                    }),
+                    onPageChanged: (i) {
+                      setState(() {
+                        _currentIndex = i;
+                        _photoZoomed = false;
+                      });
+                      _preloadAdjacent(i);
+                    },
                     itemBuilder: (_, i) {
                       final item = _items[i];
                       return item.isVideo
@@ -193,7 +204,8 @@ class _PhotoViewer extends StatefulWidget {
   State<_PhotoViewer> createState() => _PhotoViewerState();
 }
 
-class _PhotoViewerState extends State<_PhotoViewer> {
+class _PhotoViewerState extends State<_PhotoViewer>
+    with AutomaticKeepAliveClientMixin {
   Uint8List? _bytes;
   bool _loading = true;
   final _transformCtrl = TransformationController();
@@ -201,9 +213,18 @@ class _PhotoViewerState extends State<_PhotoViewer> {
   bool _wasZoomed = false;
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
   void initState() {
     super.initState();
-    _load();
+    final cached = _ViewerPhotoCache.get(widget.item.id);
+    if (cached != null && cached.isNotEmpty) {
+      _bytes = cached;
+      _loading = false;
+    } else {
+      _load();
+    }
     _transformCtrl.addListener(_onTransform);
   }
 
@@ -229,6 +250,7 @@ class _PhotoViewerState extends State<_PhotoViewer> {
       const ThumbnailSize(1080, 1920),
       quality: 95,
     );
+    if (bytes != null) _ViewerPhotoCache.set(widget.item.id, bytes);
     if (!mounted) return;
     setState(() {
       _bytes = bytes;
@@ -257,6 +279,7 @@ class _PhotoViewerState extends State<_PhotoViewer> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // required by AutomaticKeepAliveClientMixin
     if (_loading) {
       return const Center(
         child: SizedBox(
@@ -297,12 +320,16 @@ class _VideoViewer extends StatefulWidget {
   State<_VideoViewer> createState() => _VideoViewerState();
 }
 
-class _VideoViewerState extends State<_VideoViewer> {
+class _VideoViewerState extends State<_VideoViewer>
+    with AutomaticKeepAliveClientMixin {
   Uint8List? _thumbnail;
   VideoPlayerController? _controller;
   bool _loadingThumb = true;
   bool _loadingVideo = false;
   double _volume = 1.0;
+
+  @override
+  bool get wantKeepAlive => true;
   bool _showVolume = false;
 
   @override
@@ -379,6 +406,7 @@ class _VideoViewerState extends State<_VideoViewer> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // required by AutomaticKeepAliveClientMixin
     final ctrl = _controller;
 
     if (ctrl != null && ctrl.value.isInitialized) {
@@ -1248,5 +1276,34 @@ class _Divider extends StatelessWidget {
       indent: AppSpacing.md,
       endIndent: AppSpacing.md,
     );
+  }
+}
+
+// In-memory cache for full-res viewer images — survives page swipes
+class _ViewerPhotoCache {
+  static final Map<String, Uint8List> _data = {};
+  static const _limit = 30;
+
+  static Uint8List? get(String id) => _data[id];
+
+  static void set(String id, Uint8List bytes) {
+    if (_data.length >= _limit) _data.remove(_data.keys.first);
+    _data[id] = bytes;
+  }
+
+  static Future<void> preload(String id) async {
+    if (_data.containsKey(id)) return;
+    _data[id] = Uint8List(0); // sentinel to prevent duplicate requests
+    final asset = await AssetEntity.fromId(id);
+    if (asset == null) { _data.remove(id); return; }
+    final bytes = await asset.thumbnailDataWithSize(
+      const ThumbnailSize(1080, 1920),
+      quality: 95,
+    );
+    if (bytes != null) {
+      _data[id] = bytes;
+    } else {
+      _data.remove(id);
+    }
   }
 }
