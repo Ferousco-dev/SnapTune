@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -176,7 +177,10 @@ class _SettingsPageState extends State<SettingsPage> {
         backgroundColor: theme.scaffoldBackgroundColor,
         appBar: AppBar(
           backgroundColor: theme.scaffoldBackgroundColor,
-          automaticallyImplyLeading: false,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+            onPressed: () => context.pop(),
+          ),
           title: Text(
             'Settings',
             style: AppTypography.outfit(
