@@ -64,6 +64,10 @@ final GoRouter appRouter = GoRouter(
       path: Routes.history,
       pageBuilder: (_, state) => _fade(state, const HistoryPage()),
     ),
+    GoRoute(
+      path: Routes.favorites,
+      pageBuilder: (_, state) => _fade(state, const FavoritesPage()),
+    ),
     ShellRoute(
       pageBuilder: (_, _, child) => NoTransitionPage(child: AppShell(child: child)),
       routes: [
@@ -81,10 +85,6 @@ final GoRouter appRouter = GoRouter(
             final args = state.extra as OptimizeArgs?;
             return _fadeShell(state, OptimizePage(args: args));
           },
-        ),
-        GoRoute(
-          path: Routes.favorites,
-          pageBuilder: (_, state) => _fadeShell(state, const FavoritesPage()),
         ),
         GoRoute(
           path: Routes.settings,
