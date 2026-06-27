@@ -1,13 +1,17 @@
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:photo_manager/photo_manager.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../../../core/router/routes.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../gallery/data/models/media_item_model.dart';
 import '../../../gallery/domain/entities/media_item.dart';
+import '../../data/services/history_service.dart';
+import '../../domain/entities/optimization_record.dart';
 import '../../domain/entities/platform_preset.dart';
 
 class OptimizeArgs {
@@ -32,6 +36,9 @@ class _OptimizePageState extends State<OptimizePage> {
   AssetEntity? _pickedAsset;
   bool _loadingAssets = false;
 
+  // History state
+  List<OptimizationRecord> _history = [];
+
   PlatformPreset get _activePreset =>
       PlatformPreset.all.firstWhere((p) => p.id == _selected);
 
@@ -50,6 +57,13 @@ class _OptimizePageState extends State<OptimizePage> {
     super.initState();
     _quality = _activePreset.jpegQuality;
     if (!_hasPreSelected) _loadRecents();
+    _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    final records = await HistoryService.instance.load();
+    if (!mounted) return;
+    setState(() => _history = records);
   }
 
   Future<void> _loadRecents() async {
@@ -201,6 +215,26 @@ class _OptimizePageState extends State<OptimizePage> {
                     ],
                   ),
                 ),
+
+                // Savings summary + recent history
+                if (_history.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  _SavingsSummaryCard(records: _history, isDark: isDark),
+                  const SizedBox(height: AppSpacing.md),
+                  _RecentHistoryList(
+                    records: _history.take(5).toList(),
+                    isDark: isDark,
+                    onSeeAll: () => context.push(Routes.history),
+                    onShare: (record) async {
+                      final path = record.savedOutputPath;
+                      if (path != null && File(path).existsSync()) {
+                        await Share.shareXFiles([XFile(path)]);
+                      }
+                    },
+                  ),
+                ],
+
+                const SizedBox(height: AppSpacing.lg),
               ],
             ),
           ),
@@ -544,6 +578,367 @@ class _PlatformCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ── Savings summary card ──────────────────────────────────────────────────────
+
+class _SavingsSummaryCard extends StatelessWidget {
+  final List<OptimizationRecord> records;
+  final bool isDark;
+
+  const _SavingsSummaryCard({required this.records, required this.isDark});
+
+  String _fmtBytes(int bytes) {
+    if (bytes >= 1024 * 1024 * 1024) {
+      return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
+    }
+    if (bytes >= 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+    return '${(bytes / 1024).toStringAsFixed(0)} KB';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final totalSaved = HistoryService.totalSavingsBytes(records);
+    final sevenDay = HistoryService.dailySavings(records, 7);
+    final best = HistoryService.bestPresetName(records);
+    final recentCount = records.where((r) {
+      final diff = DateTime.now()
+          .difference(DateTime.fromMillisecondsSinceEpoch(r.timestampMs))
+          .inDays;
+      return diff < 7;
+    }).length;
+
+    final maxBucket = sevenDay.reduce((a, b) => a > b ? a : b);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurface : AppColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark ? AppColors.darkOutline : AppColors.outline,
+          width: 0.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Savings',
+                style: AppTypography.dmSans(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: isDark
+                      ? AppColors.darkOnSurfaceVariant
+                      : AppColors.onSurfaceVariant,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withAlpha(isDark ? 40 : 25),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  'Last 7 days',
+                  style: AppTypography.dmSans(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                _fmtBytes(totalSaved),
+                style: AppTypography.outfit(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w800,
+                  color: isDark
+                      ? AppColors.darkOnSurface
+                      : AppColors.onSurface,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  'saved · $recentCount files',
+                  style: AppTypography.dmSans(
+                    fontSize: 13,
+                    color: isDark
+                        ? AppColors.darkMuted
+                        : AppColors.muted,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (best != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Best: $best',
+              style: AppTypography.dmSans(
+                fontSize: 12,
+                color: AppColors.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          // Sparkline — 7 day bar chart
+          SizedBox(
+            height: 40,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: List.generate(7, (i) {
+                final val = sevenDay[i];
+                final frac =
+                    maxBucket > 0 ? (val / maxBucket).clamp(0.0, 1.0) : 0.0;
+                final isToday = i == 6;
+                return Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        AnimatedContainer(
+                          duration: Duration(milliseconds: 400 + i * 60),
+                          curve: Curves.easeOut,
+                          height: frac > 0 ? (frac * 32).clamp(3.0, 32.0) : 3,
+                          decoration: BoxDecoration(
+                            color: isToday
+                                ? AppColors.primary
+                                : AppColors.primary.withAlpha(
+                                    isDark ? 80 : 60),
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '7d ago',
+                style: AppTypography.dmSans(
+                    fontSize: 9,
+                    color: isDark ? AppColors.darkMuted : AppColors.muted),
+              ),
+              Text(
+                'Today',
+                style: AppTypography.dmSans(
+                    fontSize: 9,
+                    color: isDark ? AppColors.darkMuted : AppColors.muted),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Recent history list ───────────────────────────────────────────────────────
+
+class _RecentHistoryList extends StatelessWidget {
+  final List<OptimizationRecord> records;
+  final bool isDark;
+  final VoidCallback onSeeAll;
+  final void Function(OptimizationRecord) onShare;
+
+  const _RecentHistoryList({
+    required this.records,
+    required this.isDark,
+    required this.onSeeAll,
+    required this.onShare,
+  });
+
+  String _fmtBytes(int bytes) {
+    if (bytes >= 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+    return '${(bytes / 1024).toStringAsFixed(0)} KB';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Text(
+              'Recent',
+              style: AppTypography.dmSans(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: isDark
+                    ? AppColors.darkOnSurfaceVariant
+                    : AppColors.onSurfaceVariant,
+              ),
+            ),
+            const Spacer(),
+            GestureDetector(
+              onTap: onSeeAll,
+              child: Text(
+                'See all',
+                style: AppTypography.dmSans(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.primary,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.darkSurface : AppColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isDark ? AppColors.darkOutline : AppColors.outline,
+              width: 0.5,
+            ),
+          ),
+          child: Column(
+            children: List.generate(records.length, (i) {
+              final r = records[i];
+              final isLast = i == records.length - 1;
+              final hasSavings = r.savingsBytes > 0;
+
+              return Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 11),
+                    child: Row(
+                      children: [
+                        // File type icon
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: (r.isVideo
+                                    ? const Color(0xFF7B61FF)
+                                    : AppColors.primary)
+                                .withAlpha(isDark ? 40 : 25),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            r.isVideo
+                                ? Icons.videocam_rounded
+                                : Icons.image_rounded,
+                            size: 18,
+                            color: r.isVideo
+                                ? const Color(0xFF7B61FF)
+                                : AppColors.primary,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        // Name + preset
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                r.filename.isEmpty ? 'Media file' : r.filename,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTypography.dmSans(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark
+                                      ? AppColors.darkOnSurface
+                                      : AppColors.onSurface,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${r.presetName} · '
+                                '${_fmtBytes(r.originalSizeBytes)} → '
+                                '${_fmtBytes(r.outputSizeBytes)}',
+                                style: AppTypography.dmSans(
+                                  fontSize: 11,
+                                  color: isDark
+                                      ? AppColors.darkMuted
+                                      : AppColors.muted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Savings badge
+                        if (hasSavings)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 7, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF34C759).withAlpha(30),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              '-${r.savingsPct.toStringAsFixed(0)}%',
+                              style: AppTypography.dmSans(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFF34C759),
+                              ),
+                            ),
+                          ),
+                        // Share button — only if path exists
+                        if (r.savedOutputPath != null) ...[
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () => onShare(r),
+                            child: Icon(
+                              Icons.ios_share_rounded,
+                              size: 18,
+                              color: isDark
+                                  ? AppColors.darkMuted
+                                  : AppColors.muted,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (!isLast)
+                    Divider(
+                      height: 1,
+                      thickness: 0.5,
+                      indent: 62,
+                      color: isDark
+                          ? AppColors.darkOutline
+                          : AppColors.outline,
+                    ),
+                ],
+              );
+            }),
+          ),
+        ),
+      ],
     );
   }
 }
