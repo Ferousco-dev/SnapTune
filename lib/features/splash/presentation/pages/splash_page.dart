@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/di/service_locator.dart';
@@ -15,71 +14,43 @@ class SplashPage extends StatefulWidget {
 }
 
 class _SplashPageState extends State<SplashPage>
-    with TickerProviderStateMixin {
-  late final AnimationController _entryController;
-  late final AnimationController _orbitController;
-  late final AnimationController _exitController;
-
-  late final Animation<double> _scaleAnim;
-  late final Animation<double> _fadeAnim;
-  late final Animation<double> _taglineFadeAnim;
-  late final Animation<double> _exitAnim;
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _scale;
+  late final Animation<double> _logoFade;
+  late final Animation<double> _taglineFade;
+  late final Animation<Offset> _taglineSlide;
 
   @override
   void initState() {
     super.initState();
-
-    _entryController = AnimationController(
+    _ctrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1400),
+      duration: const Duration(milliseconds: 900),
     );
 
-    _orbitController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 3600),
-    )..repeat();
-
-    _exitController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 320),
+    _scale = Tween<double>(begin: 0.84, end: 1.0).animate(
+      CurvedAnimation(parent: _ctrl, curve: const Interval(0.0, 0.7, curve: Curves.easeOutCubic)),
+    );
+    _logoFade = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _ctrl, curve: const Interval(0.0, 0.5, curve: Curves.easeOut)),
+    );
+    _taglineFade = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _ctrl, curve: const Interval(0.55, 1.0, curve: Curves.easeOut)),
+    );
+    _taglineSlide = Tween<Offset>(
+      begin: const Offset(0, 0.4),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(parent: _ctrl, curve: const Interval(0.55, 1.0, curve: Curves.easeOutCubic)),
     );
 
-    _scaleAnim = Tween<double>(begin: 0.72, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _entryController,
-        curve: const Interval(0.0, 0.65, curve: Curves.easeOutBack),
-      ),
-    );
-
-    _fadeAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _entryController,
-        curve: const Interval(0.0, 0.45, curve: Curves.easeOut),
-      ),
-    );
-
-    _taglineFadeAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _entryController,
-        curve: const Interval(0.55, 1.0, curve: Curves.easeOut),
-      ),
-    );
-
-    // Fades content from 1 to 0 during exit
-    _exitAnim = Tween<double>(begin: 1.0, end: 0.0).animate(
-      CurvedAnimation(parent: _exitController, curve: Curves.easeIn),
-    );
-
-    _entryController.forward();
-    _navigateAfter();
+    _ctrl.forward();
+    _navigate();
   }
 
-  Future<void> _navigateAfter() async {
-    await Future.delayed(const Duration(milliseconds: 1900));
-    if (!mounted) return;
-    // Fade out splash content, then navigate. The gradient background stays
-    // visible so the gallery's own fade-in has a rich backdrop to emerge from.
-    await _exitController.forward();
+  Future<void> _navigate() async {
+    await Future.delayed(const Duration(milliseconds: 1600));
     if (!mounted) return;
     final done = sl<PrefsService>().isOnboardingDone;
     context.go(done ? Routes.gallery : Routes.onboarding);
@@ -87,9 +58,7 @@ class _SplashPageState extends State<SplashPage>
 
   @override
   void dispose() {
-    _entryController.dispose();
-    _orbitController.dispose();
-    _exitController.dispose();
+    _ctrl.dispose();
     super.dispose();
   }
 
@@ -97,180 +66,76 @@ class _SplashPageState extends State<SplashPage>
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.splashGradient,
-        ),
-        // Gradient stays at full opacity; only the content fades out on exit
-        child: AnimatedBuilder(
-          animation: _exitController,
-          builder: (_, child) => Opacity(opacity: _exitAnim.value, child: child),
-          child: Stack(
-            children: [
-              // Ambient glow circles
-            Positioned(
-              top: -80,
-              right: -60,
-              child: Container(
-                width: 280,
-                height: 280,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withAlpha(18),
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: -100,
-              left: -80,
-              child: Container(
-                width: 320,
-                height: 320,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withAlpha(12),
-                ),
-              ),
-            ),
-
-            // Orbiting sparkle dots
-            Center(
-              child: AnimatedBuilder(
-                animation: _orbitController,
-                builder: (_, _) => SizedBox(
-                  width: 260,
-                  height: 260,
-                  child: _SparkleOrbit(progress: _orbitController.value),
-                ),
-              ),
-            ),
-
-            // Logo + wordmark
-            Center(
-              child: AnimatedBuilder(
-                animation: _entryController,
-                builder: (_, child) => Opacity(
-                  opacity: _fadeAnim.value,
+        decoration: const BoxDecoration(gradient: AppColors.splashGradient),
+        child: SafeArea(
+          child: AnimatedBuilder(
+            animation: _ctrl,
+            builder: (_, _) => Column(
+              children: [
+                const Spacer(flex: 3),
+                // Logo
+                Opacity(
+                  opacity: _logoFade.value,
                   child: Transform.scale(
-                    scale: _scaleAnim.value,
-                    child: child,
-                  ),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Logo with white-tinted shadow
-                    Container(
-                      width: 140,
-                      height: 140,
+                    scale: _scale.value,
+                    child: Container(
+                      width: 120,
+                      height: 120,
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(36),
+                        borderRadius: BorderRadius.circular(30),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withAlpha(60),
-                            blurRadius: 40,
-                            offset: const Offset(0, 16),
+                            color: Colors.black.withAlpha(50),
+                            blurRadius: 32,
+                            offset: const Offset(0, 12),
                           ),
                         ],
                       ),
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(36),
+                        borderRadius: BorderRadius.circular(30),
                         child: Image.asset(
                           'assets/images/logo.png',
-                          width: 140,
-                          height: 140,
                           fit: BoxFit.cover,
                         ),
                       ),
                     ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'SnapTune',
-                      style: AppTypography.outfit(
-                        fontSize: 34,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    AnimatedBuilder(
-                      animation: _entryController,
-                      builder: (_, child) => Opacity(
-                        opacity: _taglineFadeAnim.value,
-                        child: child,
-                      ),
-                      child: Text(
-                        'Perfect before you share.',
-                        style: AppTypography.dmSans(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w400,
-                          color: Colors.white.withAlpha(190),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-          ],
-        ),        // Stack
-        ),        // AnimatedBuilder
-      ),          // Container
-    );
-  }
-}
-
-class _SparkleOrbit extends StatelessWidget {
-  final double progress;
-
-  const _SparkleOrbit({required this.progress});
-
-  @override
-  Widget build(BuildContext context) {
-    const sparkles = [
-      _SparkleConfig(radius: 110, angleOffset: 0.0, size: 6, opacity: 0.6),
-      _SparkleConfig(radius: 110, angleOffset: 0.33, size: 4, opacity: 0.4),
-      _SparkleConfig(radius: 110, angleOffset: 0.67, size: 5, opacity: 0.5),
-      _SparkleConfig(radius: 80, angleOffset: 0.17, size: 3.5, opacity: 0.35),
-      _SparkleConfig(radius: 80, angleOffset: 0.50, size: 4.5, opacity: 0.45),
-      _SparkleConfig(radius: 80, angleOffset: 0.83, size: 3, opacity: 0.3),
-    ];
-
-    return Stack(
-      alignment: Alignment.center,
-      children: sparkles.map((s) {
-        final angle = (progress + s.angleOffset) * 2 * math.pi;
-        final x = math.cos(angle) * s.radius;
-        final y = math.sin(angle) * s.radius;
-        return Transform.translate(
-          offset: Offset(x, y),
-          child: Opacity(
-            opacity: s.opacity,
-            child: Container(
-              width: s.size,
-              height: s.size,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-              ),
+                const SizedBox(height: 22),
+                // App name
+                Opacity(
+                  opacity: _logoFade.value,
+                  child: Text(
+                    'SnapTune',
+                    style: AppTypography.outfit(
+                      fontSize: 32,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Tagline slides up
+                SlideTransition(
+                  position: _taglineSlide,
+                  child: Opacity(
+                    opacity: _taglineFade.value,
+                    child: Text(
+                      'Perfect before you share.',
+                      style: AppTypography.dmSans(
+                        fontSize: 15,
+                        color: Colors.white.withAlpha(180),
+                      ),
+                    ),
+                  ),
+                ),
+                const Spacer(flex: 4),
+              ],
             ),
           ),
-        );
-      }).toList(),
+        ),
+      ),
     );
   }
-}
-
-class _SparkleConfig {
-  final double radius;
-  final double angleOffset;
-  final double size;
-  final double opacity;
-
-  const _SparkleConfig({
-    required this.radius,
-    required this.angleOffset,
-    required this.size,
-    required this.opacity,
-  });
 }
