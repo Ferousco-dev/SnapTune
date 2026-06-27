@@ -14,8 +14,9 @@ class SplashPage extends StatefulWidget {
 }
 
 class _SplashPageState extends State<SplashPage>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late final AnimationController _ctrl;
+  late final AnimationController _exitCtrl;
   late final Animation<double> _scale;
   late final Animation<double> _nameFade;
   late final Animation<double> _taglineFade;
@@ -24,9 +25,16 @@ class _SplashPageState extends State<SplashPage>
   @override
   void initState() {
     super.initState();
+
     _ctrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
+    );
+    // Starts at 1 (fully visible); reversed to 0 just before navigation
+    _exitCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 280),
+      value: 1.0,
     );
 
     _scale = Tween<double>(begin: 0.82, end: 1.0).animate(
@@ -50,7 +58,11 @@ class _SplashPageState extends State<SplashPage>
   }
 
   Future<void> _navigate() async {
-    await Future.delayed(const Duration(milliseconds: 1600));
+    // Hold the splash long enough for the enter animation to finish
+    await Future.delayed(const Duration(milliseconds: 1200));
+    if (!mounted) return;
+    // Fade the whole splash to 0 before swapping routes — eliminates the split
+    await _exitCtrl.reverse();
     if (!mounted) return;
     final done = sl<PrefsService>().isOnboardingDone;
     context.go(done ? Routes.gallery : Routes.onboarding);
@@ -59,53 +71,60 @@ class _SplashPageState extends State<SplashPage>
   @override
   void dispose() {
     _ctrl.dispose();
+    _exitCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(gradient: AppColors.splashGradient),
-        child: SafeArea(
-          child: AnimatedBuilder(
-            animation: _ctrl,
-            builder: (_, _) => Column(
-              children: [
-                const Spacer(flex: 3),
-                // App name
-                Opacity(
-                  opacity: _nameFade.value,
-                  child: Transform.scale(
-                    scale: _scale.value,
-                    child: Text(
-                      'SnapTune',
-                      style: AppTypography.outfit(
-                        fontSize: 44,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                        letterSpacing: -1.0,
+    return FadeTransition(
+      opacity: _exitCtrl,
+      child: Scaffold(
+        // Solid fallback so no white shows through during any rendering gap
+        backgroundColor: AppColors.primary,
+        body: SizedBox.expand(
+          child: DecoratedBox(
+            decoration: const BoxDecoration(gradient: AppColors.splashGradient),
+            child: SafeArea(
+              child: AnimatedBuilder(
+                animation: _ctrl,
+                builder: (_, _) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const Spacer(flex: 3),
+                    Opacity(
+                      opacity: _nameFade.value,
+                      child: Transform.scale(
+                        scale: _scale.value,
+                        child: Text(
+                          'SnapTune',
+                          style: AppTypography.outfit(
+                            fontSize: 44,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            letterSpacing: -1.0,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                // Tagline slides up
-                SlideTransition(
-                  position: _taglineSlide,
-                  child: Opacity(
-                    opacity: _taglineFade.value,
-                    child: Text(
-                      'Perfect before you share.',
-                      style: AppTypography.dmSans(
-                        fontSize: 15,
-                        color: Colors.white.withAlpha(180),
+                    const SizedBox(height: 8),
+                    SlideTransition(
+                      position: _taglineSlide,
+                      child: Opacity(
+                        opacity: _taglineFade.value,
+                        child: Text(
+                          'Perfect before you share.',
+                          style: AppTypography.dmSans(
+                            fontSize: 15,
+                            color: Colors.white.withAlpha(180),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                    const Spacer(flex: 4),
+                  ],
                 ),
-                const Spacer(flex: 4),
-              ],
+              ),
             ),
           ),
         ),
