@@ -7,6 +7,7 @@ import 'package:photo_manager/photo_manager.dart';
 import '../../../../core/router/routes.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../data/services/video_processor.dart';
 import '../../domain/entities/platform_preset.dart';
 import 'optimize_page.dart';
 import 'result_page.dart';
@@ -28,12 +29,22 @@ class _ProcessingPageState extends State<ProcessingPage>
   double _progress = 0.0;
   String? _errorMsg;
 
-  static const _steps = [
+  static const _imageSteps = [
     'Analyzing media...',
     'Applying smart filters...',
     'Encoding output...',
     'Finalizing...',
   ];
+
+  static const _videoSteps = [
+    'Analyzing video...',
+    'Transcoding to H.264...',
+    'Splitting segments...',
+    'Finalizing...',
+  ];
+
+  List<String> get _steps =>
+      widget.args?.item?.isVideo == true ? _videoSteps : _imageSteps;
 
   @override
   void initState() {
@@ -58,15 +69,57 @@ class _ProcessingPageState extends State<ProcessingPage>
 
     _setStep(0, 0.05);
 
-    // Video files: pass through — flutter_image_compress handles stills only
+    // Video pipeline — probe → transcode → split
     if (item?.isVideo == true) {
-      _setStep(3, 1.0);
-      await Future.delayed(const Duration(milliseconds: 400));
-      if (!mounted) return;
-      context.pushReplacement(
-        Routes.result,
-        extra: ResultArgs(preset: preset, item: item),
-      );
+      _setStep(0, 0.05);
+      try {
+        final asset = await AssetEntity.fromId(item!.id);
+        final file = await asset?.file;
+
+        if (file == null) {
+          _setStep(3, 1.0);
+          await Future.delayed(const Duration(milliseconds: 300));
+          if (!mounted) return;
+          context.pushReplacement(
+            Routes.result,
+            extra: ResultArgs(preset: preset, item: item),
+          );
+          return;
+        }
+
+        final result = await VideoProcessor().process(
+          inputPath: file.absolute.path,
+          onProgress: (p) {
+            if (!mounted) return;
+            // Map 0→1 progress across steps 0→2
+            final stepIndex = p < 0.1
+                ? 0
+                : p < 0.85
+                    ? 1
+                    : 2;
+            _setStep(stepIndex, p);
+          },
+        );
+
+        if (!mounted) return;
+        _setStep(3, 1.0);
+        await Future.delayed(const Duration(milliseconds: 300));
+        if (!mounted) return;
+
+        context.pushReplacement(
+          Routes.result,
+          extra: ResultArgs(
+            preset: preset,
+            item: item,
+            bypassed: result.bypassed,
+            originalSizeBytes: result.originalSizeBytes,
+            videoPaths: result.outputPaths,
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _errorMsg = 'Video processing failed: $e');
+      }
       return;
     }
 

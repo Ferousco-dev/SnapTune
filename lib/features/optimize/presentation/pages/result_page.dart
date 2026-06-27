@@ -18,12 +18,15 @@ class ResultArgs {
   final Uint8List? outputBytes;
   final int originalSizeBytes;
   final bool bypassed;
+  // Video output: one path per clip (multiple when Status Splitter fires)
+  final List<String>? videoPaths;
   const ResultArgs({
     required this.preset,
     this.item,
     this.outputBytes,
     this.originalSizeBytes = 0,
     this.bypassed = false,
+    this.videoPaths,
   });
 }
 
@@ -68,18 +71,29 @@ class _ResultPageState extends State<ResultPage>
     super.dispose();
   }
 
+  bool get _isVideo => widget.args?.videoPaths != null;
+  bool get _isMultiClip => (_isVideo) && (widget.args!.videoPaths!.length > 1);
+
   String get _sizeReductionLabel {
     if (widget.args?.bypassed == true) return '0%';
-    final out = widget.args?.outputBytes;
     final orig = widget.args?.originalSizeBytes ?? 0;
-    if (out == null || orig == 0) return '—';
+    if (orig == 0) return '—';
+    if (_isVideo) {
+      final paths = widget.args!.videoPaths!;
+      final outSize = paths.fold<int>(
+        0, (s, p) => s + (File(p).existsSync() ? File(p).lengthSync() : 0));
+      final pct = ((1 - outSize / orig) * 100).round();
+      return pct > 0 ? '$pct%' : '0%';
+    }
+    final out = widget.args?.outputBytes;
+    if (out == null) return '—';
     final pct = ((1 - out.length / orig) * 100).round();
     return pct > 0 ? '$pct%' : '0%';
   }
 
   String get _qualityLabel {
+    if (_isVideo) return 'H.264';
     final q = widget.args?.preset.jpegQuality ?? 85;
-    // Map quality 80-100 → score 92-99
     final score = 92 + ((q - 80) / 20 * 7).round().clamp(0, 7);
     return '$score';
   }
@@ -97,26 +111,35 @@ class _ResultPageState extends State<ResultPage>
     return file;
   }
 
-  Future<void> _shareNow() async {
+  Future<void> _shareNow({String? singleVideoPath}) async {
     setState(() => _sharing = true);
     try {
-      File? file = await _outputFile();
-      if (file == null && widget.args?.item != null) {
-        final asset = await AssetEntity.fromId(widget.args!.item!.id);
-        file = await asset?.file;
-      }
-      if (file == null || !mounted) return;
-
       final box = _shareButtonKey.currentContext?.findRenderObject()
           as RenderBox?;
       final origin = box != null
           ? box.localToGlobal(Offset.zero) & box.size
           : const Rect.fromLTWH(0, 400, 100, 50);
 
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        sharePositionOrigin: origin,
-      );
+      if (_isVideo) {
+        final paths = singleVideoPath != null
+            ? [singleVideoPath]
+            : widget.args!.videoPaths!;
+        final xFiles = paths
+            .where((p) => File(p).existsSync())
+            .map((p) => XFile(p))
+            .toList();
+        if (xFiles.isEmpty || !mounted) return;
+        await Share.shareXFiles(xFiles, sharePositionOrigin: origin);
+        return;
+      }
+
+      File? file = await _outputFile();
+      if (file == null && widget.args?.item != null) {
+        final asset = await AssetEntity.fromId(widget.args!.item!.id);
+        file = await asset?.file;
+      }
+      if (file == null || !mounted) return;
+      await Share.shareXFiles([XFile(file.path)], sharePositionOrigin: origin);
     } finally {
       if (mounted) setState(() => _sharing = false);
     }
@@ -125,34 +148,48 @@ class _ResultPageState extends State<ResultPage>
   Future<void> _saveCopy() async {
     setState(() => _saving = true);
     try {
-      final bytes = widget.args?.outputBytes;
-      if (bytes != null) {
-        final preset = widget.args?.preset;
-        final name = preset != null
-            ? 'snaptune_${preset.name.toLowerCase().replaceAll(' ', '_')}.jpg'
-            : 'snaptune_optimized.jpg';
-        await PhotoManager.editor.saveImage(
-          bytes,
-          filename: name,
-          title: 'SnapTune',
-        );
-      } else if (widget.args?.item != null) {
-        final asset = await AssetEntity.fromId(widget.args!.item!.id);
-        final orig = await asset?.originBytes;
-        if (orig != null) {
-          await PhotoManager.editor.saveImage(
-            orig,
-            filename: 'snaptune_optimized.jpg',
-            title: 'SnapTune',
+      if (_isVideo) {
+        final paths = widget.args!.videoPaths!
+            .where((p) => File(p).existsSync())
+            .toList();
+        for (int i = 0; i < paths.length; i++) {
+          await PhotoManager.editor.saveVideo(
+            File(paths[i]),
+            title: paths.length > 1 ? 'SnapTune Clip ${i + 1}' : 'SnapTune',
           );
         }
       } else {
-        return;
+        final bytes = widget.args?.outputBytes;
+        if (bytes != null) {
+          final preset = widget.args?.preset;
+          final name = preset != null
+              ? 'snaptune_${preset.name.toLowerCase().replaceAll(' ', '_')}.jpg'
+              : 'snaptune_optimized.jpg';
+          await PhotoManager.editor.saveImage(
+            bytes,
+            filename: name,
+            title: 'SnapTune',
+          );
+        } else if (widget.args?.item != null) {
+          final asset = await AssetEntity.fromId(widget.args!.item!.id);
+          final orig = await asset?.originBytes;
+          if (orig != null) {
+            await PhotoManager.editor.saveImage(
+              orig,
+              filename: 'snaptune_optimized.jpg',
+              title: 'SnapTune',
+            );
+          }
+        } else {
+          return;
+        }
       }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Saved to your gallery'),
+        SnackBar(
+          content: Text(_isVideo && _isMultiClip
+              ? 'All clips saved to your gallery'
+              : 'Saved to your gallery'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -227,11 +264,15 @@ class _ResultPageState extends State<ResultPage>
             FadeTransition(
               opacity: _fadeAnim,
               child: Text(
-                widget.args?.item?.isVideo == true
-                    ? 'Video ready for ${preset.name}'
-                    : widget.args?.bypassed == true
-                        ? 'Already perfect for ${preset.name}'
-                        : 'Optimized for ${preset.name}',
+                _isMultiClip
+                    ? 'Split into ${widget.args!.videoPaths!.length} clips for ${preset.name}'
+                    : _isVideo
+                        ? widget.args?.bypassed == true
+                            ? 'Video already optimal for ${preset.name}'
+                            : 'Video ready for ${preset.name}'
+                        : widget.args?.bypassed == true
+                            ? 'Already perfect for ${preset.name}'
+                            : 'Optimized for ${preset.name}',
                 style: AppTypography.dmSans(
                   fontSize: 14,
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -262,15 +303,143 @@ class _ResultPageState extends State<ResultPage>
                     const SizedBox(width: 12),
                     _StatCard(
                       isDark: isDark,
-                      label: 'Quality score',
+                      label: _isVideo ? 'Codec' : 'Quality score',
                       value: _qualityLabel,
-                      icon: Icons.stars_rounded,
+                      icon: _isVideo
+                          ? Icons.videocam_rounded
+                          : Icons.stars_rounded,
                       color: AppColors.violet,
                     ),
                   ],
                 ),
               ),
             ),
+
+            // Multi-clip list
+            if (_isMultiClip) ...[
+              const SizedBox(height: 20),
+              FadeTransition(
+                opacity: _fadeAnim,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          'Post in order — each clip is under 29 seconds',
+                          style: AppTypography.dmSans(
+                            fontSize: 12,
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                      ...List.generate(
+                        widget.args!.videoPaths!.length,
+                        (i) {
+                          final path = widget.args!.videoPaths![i];
+                          final size = File(path).existsSync()
+                              ? File(path).lengthSync()
+                              : 0;
+                          final sizeMb =
+                              (size / (1024 * 1024)).toStringAsFixed(1);
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? AppColors.darkSurface
+                                  : AppColors.surface,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isDark
+                                    ? AppColors.darkOutline
+                                    : AppColors.outline,
+                                width: 0.5,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 34,
+                                  height: 34,
+                                  decoration: BoxDecoration(
+                                    color: preset.color
+                                        .withAlpha(isDark ? 40 : 25),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      '${i + 1}',
+                                      style: AppTypography.outfit(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                        color: preset.color,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Clip ${i + 1}',
+                                        style: AppTypography.dmSans(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurface,
+                                        ),
+                                      ),
+                                      Text(
+                                        '$sizeMb MB · max 29s',
+                                        style: AppTypography.dmSans(
+                                          fontSize: 11,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                GestureDetector(
+                                  onTap: () => _shareNow(singleVideoPath: path),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 7),
+                                    decoration: BoxDecoration(
+                                      color: preset.color
+                                          .withAlpha(isDark ? 40 : 25),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      'Share',
+                                      style: AppTypography.dmSans(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: preset.color,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
 
             const Spacer(flex: 3),
 
@@ -321,7 +490,11 @@ class _ResultPageState extends State<ResultPage>
                                 color: Colors.white, size: 18),
                           const SizedBox(width: 8),
                           Text(
-                            _sharing ? 'Preparing...' : 'Share Now',
+                            _sharing
+                                ? 'Preparing...'
+                                : _isMultiClip
+                                    ? 'Share All Clips'
+                                    : 'Share Now',
                             style: AppTypography.dmSans(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
