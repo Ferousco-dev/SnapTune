@@ -65,7 +65,7 @@ final GoRouter appRouter = GoRouter(
       pageBuilder: (_, state) => _fade(state, const HistoryPage()),
     ),
     ShellRoute(
-      builder: (_, _, child) => AppShell(child: child),
+      pageBuilder: (_, _, child) => NoTransitionPage(child: AppShell(child: child)),
       routes: [
         GoRoute(
           path: Routes.gallery,
