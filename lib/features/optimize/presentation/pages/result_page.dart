@@ -17,11 +17,13 @@ class ResultArgs {
   final MediaItem? item;
   final Uint8List? outputBytes;
   final int originalSizeBytes;
+  final bool bypassed;
   const ResultArgs({
     required this.preset,
     this.item,
-    this.outputBytes,  // Uint8List from optimization engine
+    this.outputBytes,
     this.originalSizeBytes = 0,
+    this.bypassed = false,
   });
 }
 
@@ -67,6 +69,7 @@ class _ResultPageState extends State<ResultPage>
   }
 
   String get _sizeReductionLabel {
+    if (widget.args?.bypassed == true) return '0%';
     final out = widget.args?.outputBytes;
     final orig = widget.args?.originalSizeBytes ?? 0;
     if (out == null || orig == 0) return '—';
@@ -226,7 +229,9 @@ class _ResultPageState extends State<ResultPage>
               child: Text(
                 widget.args?.item?.isVideo == true
                     ? 'Video ready for ${preset.name}'
-                    : 'Optimized for ${preset.name}',
+                    : widget.args?.bypassed == true
+                        ? 'Already perfect for ${preset.name}'
+                        : 'Optimized for ${preset.name}',
                 style: AppTypography.dmSans(
                   fontSize: 14,
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -245,9 +250,13 @@ class _ResultPageState extends State<ResultPage>
                   children: [
                     _StatCard(
                       isDark: isDark,
-                      label: 'Size reduction',
+                      label: widget.args?.bypassed == true
+                          ? 'Already optimal'
+                          : 'Size reduction',
                       value: _sizeReductionLabel,
-                      icon: Icons.compress_rounded,
+                      icon: widget.args?.bypassed == true
+                          ? Icons.verified_rounded
+                          : Icons.compress_rounded,
                       color: AppColors.success,
                     ),
                     const SizedBox(width: 12),
