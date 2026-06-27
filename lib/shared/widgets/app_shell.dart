@@ -23,7 +23,7 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell>
     with SingleTickerProviderStateMixin {
   late final AnimationController _slideCtrl;
-  late final Animation<Offset> _slideAnim;
+  late final Animation<double> _sizeFactor;
   bool _navVisible = true;
 
   @override
@@ -34,10 +34,9 @@ class _AppShellState extends State<AppShell>
       duration: const Duration(milliseconds: 220),
       value: 0, // 0 = visible
     );
-    _slideAnim = Tween<Offset>(
-      begin: Offset.zero,
-      end: const Offset(0, 1),
-    ).animate(CurvedAnimation(parent: _slideCtrl, curve: Curves.easeInOut));
+    _sizeFactor = Tween<double>(begin: 1.0, end: 0.0).animate(
+      CurvedAnimation(parent: _slideCtrl, curve: Curves.easeInOut),
+    );
   }
 
   @override
@@ -47,14 +46,15 @@ class _AppShellState extends State<AppShell>
   }
 
   void _onScroll(ScrollNotification notification) {
+    final location = GoRouterState.of(context).uri.toString();
+    if (!location.startsWith(Routes.gallery)) return;
+
     if (notification is ScrollUpdateNotification) {
       final delta = notification.scrollDelta ?? 0;
       if (delta > 4 && _navVisible) {
-        // Scrolling down — hide
         _navVisible = false;
         _slideCtrl.forward();
       } else if (delta < -4 && !_navVisible) {
-        // Scrolling up — show
         _navVisible = true;
         _slideCtrl.reverse();
       }
@@ -86,8 +86,9 @@ class _AppShellState extends State<AppShell>
         },
         child: widget.child,
       ),
-      bottomNavigationBar: SlideTransition(
-        position: _slideAnim,
+      bottomNavigationBar: SizeTransition(
+        sizeFactor: _sizeFactor,
+        axisAlignment: 1.0,
         child: Container(
           decoration: BoxDecoration(
             color: isDark ? AppColors.darkSurface : AppColors.surface,
