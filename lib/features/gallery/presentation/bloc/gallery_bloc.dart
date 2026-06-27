@@ -84,6 +84,7 @@ class GalleryBloc extends Bloc<GalleryEvent, GalleryState> {
     Emitter<GalleryState> emit,
   ) async {
     if (!state.hasMore || state.isLoading) return;
+    emit(state.copyWith(status: GalleryStatus.loading));
     final nextPage = state.page + 1;
     await _loadPage(emit, page: nextPage, filter: state.activeFilter, replace: false);
   }
