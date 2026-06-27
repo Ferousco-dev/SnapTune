@@ -10,6 +10,7 @@ import '../../features/favorites/presentation/pages/favorites_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
 import '../../features/viewer/presentation/pages/viewer_page.dart';
 import '../../features/people/presentation/pages/people_page.dart';
+import '../../features/optimize/presentation/pages/history_page.dart';
 import '../../features/optimize/presentation/pages/processing_page.dart';
 import '../../features/optimize/presentation/pages/result_page.dart';
 import '../../shared/widgets/app_shell.dart';
@@ -58,6 +59,10 @@ final GoRouter appRouter = GoRouter(
         final args = state.extra as ResultArgs?;
         return _fade(state, ResultPage(args: args));
       },
+    ),
+    GoRoute(
+      path: Routes.history,
+      pageBuilder: (_, state) => _fade(state, const HistoryPage()),
     ),
     ShellRoute(
       builder: (_, _, child) => AppShell(child: child),
