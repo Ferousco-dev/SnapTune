@@ -84,13 +84,15 @@ class _ViewerPageState extends State<ViewerPage> {
 
   void _onDragUpdate(DragUpdateDetails details) {
     if (!_dragging) return;
-    setState(() => _dragOffset += details.delta.dy);
+    // Only allow downward drag — clamp to 0 so upward swipe does nothing
+    setState(() => _dragOffset = (_dragOffset + details.delta.dy).clamp(0.0, double.infinity));
   }
 
   void _onDragEnd(DragEndDetails details) {
     if (!_dragging) return;
     _dragging = false;
     final velocity = details.primaryVelocity ?? 0;
+    // Dismiss only on sufficient downward drag or downward fling
     if (_dragOffset > 120 || velocity > 800) {
       context.pop();
     } else {
