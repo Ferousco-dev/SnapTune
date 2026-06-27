@@ -370,8 +370,9 @@ class VideoProcessor {
       final vf = _buildVf(plan, meta);
       parts.addAll([
         '-c:v libx264',
-        '-profile:v high',
-        '-level:v 4.0',
+        '-profile:v baseline',
+        '-level:v 3.0',
+        '-pix_fmt yuv420p',
         '-preset fast',
         '-crf 23',
         // Hard cap keeps us under WhatsApp's re-encode threshold
