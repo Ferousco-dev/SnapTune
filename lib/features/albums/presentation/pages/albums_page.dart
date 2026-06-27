@@ -89,15 +89,6 @@ class _AlbumsPageState extends State<AlbumsPage> {
     });
   }
 
-  void _showRecentlyDeletedInfo() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _RecentlyDeletedSheet(isDark: isDark),
-    );
-  }
-
   Future<void> _showCreateAlbumDialog() async {
     final name = await showModalBottomSheet<String>(
       context: context,
@@ -163,34 +154,6 @@ class _AlbumsPageState extends State<AlbumsPage> {
           ? const Center(child: CircularProgressIndicator())
           : CustomScrollView(
               slivers: [
-                // Special albums row
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.md, AppSpacing.sm, AppSpacing.md, 0),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: _SpecialAlbumCard(
-                            label: 'People',
-                            icon: Icons.face_rounded,
-                            isDark: isDark,
-                            onTap: () => context.push(Routes.people),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _SpecialAlbumCard(
-                            label: 'Recently Deleted',
-                            icon: Icons.delete_outline_rounded,
-                            isDark: isDark,
-                            onTap: _showRecentlyDeletedInfo,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
                 if (_albums.isEmpty)
                   SliverFillRemaining(
                     child: _EmptyAlbumsState(isDark: isDark),
@@ -399,63 +362,6 @@ class _CreateAlbumSheetState extends State<_CreateAlbumSheet> {
   }
 }
 
-class _SpecialAlbumCard extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool isDark;
-  final VoidCallback? onTap;
-
-  const _SpecialAlbumCard({
-    required this.label,
-    required this.icon,
-    required this.isDark,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final enabled = onTap != null;
-    return GestureDetector(
-      onTap: onTap,
-      child: Opacity(
-        opacity: enabled ? 1.0 : 0.45,
-        child: Container(
-          height: 60,
-          decoration: BoxDecoration(
-            color: isDark ? AppColors.darkSurfaceVariant : AppColors.surfaceVariant,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          child: Row(
-            children: [
-              Icon(icon, size: 20, color: AppColors.primary),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.dmSans(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: theme.colorScheme.onSurface,
-                  ),
-                ),
-              ),
-              Icon(
-                Icons.chevron_right_rounded,
-                size: 18,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _AlbumCard extends StatefulWidget {
   final AssetPathEntity album;
   final bool isDark;
@@ -615,96 +521,6 @@ class _EmptyAlbumsState extends StatelessWidget {
             style: AppTypography.dmSans(
               fontSize: 13,
               color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RecentlyDeletedSheet extends StatelessWidget {
-  final bool isDark;
-  const _RecentlyDeletedSheet({required this.isDark});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurface : Colors.white,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Drag handle
-          Container(
-            width: 36,
-            height: 4,
-            margin: const EdgeInsets.only(bottom: 24),
-            decoration: BoxDecoration(
-              color: isDark ? AppColors.darkOutline : AppColors.outlineVariant,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: isDark
-                  ? AppColors.darkSurfaceVariant
-                  : AppColors.surfaceVariant,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.delete_outline_rounded,
-              size: 30,
-              color: AppColors.muted,
-            ),
-          ),
-          const SizedBox(height: 18),
-          Text(
-            'Recently Deleted',
-            style: AppTypography.outfit(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: theme.colorScheme.onSurface,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'iOS keeps recently deleted photos in a protected album that third-party apps cannot access.\n\nTo view or restore them, open the Photos app, go to Albums, and scroll down to Recently Deleted.',
-            textAlign: TextAlign.center,
-            style: AppTypography.dmSans(
-              fontSize: 14,
-              height: 1.5,
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 24),
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              height: 50,
-              decoration: BoxDecoration(
-                color: isDark
-                    ? AppColors.darkSurfaceVariant
-                    : AppColors.surfaceVariant,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Center(
-                child: Text(
-                  'Got it',
-                  style: AppTypography.dmSans(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: theme.colorScheme.onSurface,
-                  ),
-                ),
-              ),
             ),
           ),
         ],
