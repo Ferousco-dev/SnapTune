@@ -51,7 +51,7 @@ class _OptimizePageState extends State<OptimizePage> {
     setState(() => _loadingAssets = true);
     try {
       final albums = await PhotoManager.getAssetPathList(
-        type: RequestType.image,
+        type: RequestType.common, // images + videos
         onlyAll: true,
       );
       if (albums.isEmpty || !mounted) return;
@@ -323,6 +323,7 @@ class _PhotoPickerStrip extends StatelessWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
+                    // Thumbnail — works for both images and videos
                     FutureBuilder<Uint8List?>(
                       future: asset.thumbnailDataWithSize(
                           const ThumbnailSize.square(160)),
@@ -337,6 +338,54 @@ class _PhotoPickerStrip extends StatelessWidget {
                         return Image.memory(snap.data!, fit: BoxFit.cover);
                       },
                     ),
+
+                    // Video indicator — play icon + duration
+                    if (asset.type == AssetType.video) ...[
+                      // Dark gradient at the bottom
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        child: Container(
+                          height: 28,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.bottomCenter,
+                              end: Alignment.topCenter,
+                              colors: [
+                                Colors.black.withAlpha(180),
+                                Colors.transparent,
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Play icon top-left
+                      const Positioned(
+                        top: 5,
+                        left: 5,
+                        child: Icon(
+                          Icons.play_circle_filled_rounded,
+                          color: Colors.white,
+                          size: 16,
+                        ),
+                      ),
+                      // Duration bottom-right
+                      Positioned(
+                        bottom: 4,
+                        right: 5,
+                        child: Text(
+                          _formatDuration(asset.duration),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+
+                    // Selection overlay
                     if (isSelected)
                       Container(
                         color: AppColors.primary.withAlpha(60),
@@ -357,6 +406,12 @@ class _PhotoPickerStrip extends StatelessWidget {
       ),
     );
   }
+}
+
+String _formatDuration(int seconds) {
+  final m = seconds ~/ 60;
+  final s = seconds % 60;
+  return '$m:${s.toString().padLeft(2, '0')}';
 }
 
 // ── Platform card ─────────────────────────────────────────────────────────────
