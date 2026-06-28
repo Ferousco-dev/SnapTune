@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:ffmpeg_kit_flutter_min_gpl/ffmpeg_kit.dart';
@@ -451,9 +452,13 @@ class VideoProcessor {
 
     final cmd = parts.join(' ');
     debugPrint('[VP] cmd: $cmd');
+
+    // executeAsync returns immediately; we must wait for the completeCallback
+    // before reading getReturnCode() — reading it before completion returns null.
+    final completer = Completer<void>();
     final session = await FFmpegKit.executeAsync(
       cmd,
-      null,
+      (s) => completer.complete(),
       null,
       (Statistics stats) {
         if (meta.durationSecs > 0 && onProgress != null) {
@@ -462,6 +467,7 @@ class VideoProcessor {
         }
       },
     );
+    await completer.future;
 
     final rc = await session.getReturnCode();
     final ok = ReturnCode.isSuccess(rc);
