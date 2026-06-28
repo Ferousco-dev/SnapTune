@@ -345,8 +345,6 @@ class _GalleryViewState extends State<_GalleryView> {
                         groupModeLabel: _groupModeLabel,
                         onCycleGroup: _cycleGroupMode,
                       ),
-                      if (!_isSelecting)
-                        _FilterBar(activeFilter: state.activeFilter),
                       if (state.status == GalleryStatus.permissionDenied)
                         const SliverFillRemaining(
                             child: _PermissionDeniedView())
@@ -360,9 +358,8 @@ class _GalleryViewState extends State<_GalleryView> {
                         if (state.hasMore && state.isLoaded)
                           const SliverToBoxAdapter(
                               child: _LoadMoreIndicator()),
-                        if (_isSelecting)
-                          const SliverToBoxAdapter(
-                              child: SizedBox(height: 80)),
+                        const SliverToBoxAdapter(
+                            child: SizedBox(height: 88)),
                       ],
                     ],
                   ),        // CustomScrollView
@@ -379,6 +376,20 @@ class _GalleryViewState extends State<_GalleryView> {
                         onShare: () => _shareSelected(sorted),
                         onOptimize: () => _optimizeSelected(sorted),
                         onDelete: _confirmDelete,
+                      ),
+                    ),
+                  if (!_isSelecting)
+                    Positioned(
+                      bottom: MediaQuery.of(context).padding.bottom + 12,
+                      left: 0,
+                      right: 0,
+                      child: Center(
+                        child: _FloatingFilterPills(
+                          activeFilter: state.activeFilter,
+                          onFilter: (f) => context
+                              .read<GalleryBloc>()
+                              .add(GalleryFilterChanged(f)),
+                        ),
                       ),
                     ),
                 ],
@@ -857,64 +868,60 @@ class _ResultGrid extends StatelessWidget {
 }
 
 
-class _FilterBar extends StatelessWidget {
+class _FloatingFilterPills extends StatelessWidget {
   final MediaType? activeFilter;
-  const _FilterBar({required this.activeFilter});
+  final void Function(MediaType?) onFilter;
+
+  const _FloatingFilterPills({
+    required this.activeFilter,
+    required this.onFilter,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    const filters = <(String, MediaType?)>[
+      ('All', null),
+      ('Videos', MediaType.video),
+      ('Photos', MediaType.image),
+    ];
 
-    final filters = <String, MediaType?>{
-      'All': null,
-      'Photos': MediaType.image,
-      'Videos': MediaType.video,
-    };
-
-    return SliverToBoxAdapter(
-      child: SizedBox(
-        height: 38,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-          itemCount: filters.length,
-          separatorBuilder: (_, _) => const SizedBox(width: 8),
-          itemBuilder: (_, i) {
-            final entry = filters.entries.elementAt(i);
-            final isActive = activeFilter == entry.value;
-            return GestureDetector(
-              onTap: () => context
-                  .read<GalleryBloc>()
-                  .add(GalleryFilterChanged(entry.value)),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 6),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: isActive
-                      ? AppColors.primary
-                      : (isDark
-                          ? AppColors.darkSurfaceVariant
-                          : AppColors.surfaceVariant),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  entry.key,
-                  style: AppTypography.dmSans(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: isActive
-                        ? Colors.white
-                        : (isDark
-                            ? AppColors.darkOnSurfaceVariant
-                            : AppColors.onSurfaceVariant),
-                  ),
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1C1C1E),
+        borderRadius: BorderRadius.circular(50),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(80),
+            blurRadius: 24,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: filters.map((f) {
+          final isActive = activeFilter == f.$2;
+          return GestureDetector(
+            onTap: () => onFilter(f.$2),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 9),
+              decoration: BoxDecoration(
+                color: isActive ? Colors.white : Colors.transparent,
+                borderRadius: BorderRadius.circular(50),
+              ),
+              child: Text(
+                f.$1,
+                style: AppTypography.dmSans(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: isActive ? const Color(0xFF1C1C1E) : Colors.white60,
                 ),
               ),
-            );
-          },
-        ),
+            ),
+          );
+        }).toList(),
       ),
     );
   }
