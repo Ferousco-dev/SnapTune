@@ -140,6 +140,10 @@ class _AlbumsPageState extends State<AlbumsPage> {
       appBar: AppBar(
         backgroundColor: theme.scaffoldBackgroundColor,
         automaticallyImplyLeading: false,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+          onPressed: () => context.go(Routes.gallery),
+        ),
         title: Text(
           'Albums',
           style: AppTypography.outfit(
