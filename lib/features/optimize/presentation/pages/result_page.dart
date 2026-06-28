@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
@@ -254,7 +255,7 @@ class _ResultPageState extends State<ResultPage>
                             color: preset.color.withAlpha(isDark ? 45 : 28),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Icon(preset.icon, color: preset.color, size: 15),
+                          child: FaIcon(preset.icon, color: preset.color, size: 13),
                         ),
                         const SizedBox(width: 8),
                         Text(
