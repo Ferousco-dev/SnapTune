@@ -91,37 +91,43 @@ class _SplashPageState extends State<SplashPage>
                 builder: (_, _) => Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    const Spacer(flex: 3),
-                    Opacity(
-                      opacity: _nameFade.value,
-                      child: Transform.scale(
-                        scale: _scale.value,
-                        child: Text(
-                          'SnapTune',
-                          style: AppTypography.outfit(
-                            fontSize: 44,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                            letterSpacing: -1.0,
+                    // Name — true vertical center
+                    Expanded(
+                      child: Center(
+                        child: Opacity(
+                          opacity: _nameFade.value,
+                          child: Transform.scale(
+                            scale: _scale.value,
+                            child: Text(
+                              'SnapTune',
+                              style: AppTypography.outfit(
+                                fontSize: 54,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                                letterSpacing: -1.5,
+                              ),
+                            ),
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    SlideTransition(
-                      position: _taglineSlide,
-                      child: Opacity(
-                        opacity: _taglineFade.value,
-                        child: Text(
-                          'Perfect before you share.',
-                          style: AppTypography.dmSans(
-                            fontSize: 15,
-                            color: Colors.white.withAlpha(180),
+                    // Tagline pinned to bottom
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 36),
+                      child: SlideTransition(
+                        position: _taglineSlide,
+                        child: Opacity(
+                          opacity: _taglineFade.value,
+                          child: Text(
+                            'Perfect before you share.',
+                            style: AppTypography.dmSans(
+                              fontSize: 14,
+                              color: Colors.white.withAlpha(170),
+                            ),
                           ),
                         ),
                       ),
                     ),
-                    const Spacer(flex: 4),
                   ],
                 ),
               ),
