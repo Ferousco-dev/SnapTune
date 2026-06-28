@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:go_router/go_router.dart';
@@ -76,9 +78,18 @@ class _ProcessingPageState extends State<ProcessingPage>
       _setStep(0, 0.05);
       try {
         final asset = await AssetEntity.fromId(item!.id);
-        final file = await asset?.file;
+        debugPrint('[PP] asset lookup id=${item.id} → ${asset == null ? "NULL" : "ok"}');
+
+        // Try file first, then originFile as fallback (handles some Android paths)
+        File? file = await asset?.file;
+        if (file == null && asset != null) {
+          debugPrint('[PP] file is null, trying originFile');
+          file = await asset.originFile;
+        }
+        debugPrint('[PP] file path: ${file?.path ?? "NULL"}');
 
         if (file == null) {
+          debugPrint('[PP] both file and originFile returned null — falling through to passthrough');
           _setStep(3, 1.0);
           await Future.delayed(const Duration(milliseconds: 300));
           if (!mounted) return;
