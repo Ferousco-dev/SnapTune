@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:ffmpeg_kit_flutter_min_gpl/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_min_gpl/ffmpeg_kit_config.dart';
 import 'package:ffmpeg_kit_flutter_min_gpl/ffprobe_kit.dart';
 import 'package:ffmpeg_kit_flutter_min_gpl/return_code.dart';
 import 'package:ffmpeg_kit_flutter_min_gpl/statistics.dart';
@@ -239,6 +240,19 @@ class VideoProcessor {
     required String inputPath,
     void Function(double progress)? onProgress,
   }) async {
+    // Convert content:// URI to an SAF path FFmpegKit can read on Android
+    if (inputPath.startsWith('content://')) {
+      try {
+        final saf = await FFmpegKitConfig.getSafParameterForRead(inputPath);
+        if (saf != null) {
+          debugPrint('[VP] SAF path: $saf');
+          inputPath = saf;
+        }
+      } catch (e) {
+        debugPrint('[VP] SAF conversion failed: $e');
+      }
+    }
+
     final originalSize = await _fileSizeOf(inputPath);
     onProgress?.call(0.05);
 
