@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Android 12+ (API 31) SplashScreen API.
+        These attributes only apply to the mandatory OS splash screen —
+        they have no effect on older Android versions.
+
+        Goal: make the system splash background identical to the Flutter
+        SplashPage background (#5B5BD6) so the user perceives a single
+        uninterrupted launch experience, not two separate screens.
+    -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <!-- Solid brand purple — same as launch_background_color -->
+        <item name="android:windowSplashScreenBackground">@color/launch_background_color</item>
+        <!-- App icon centered; Android clips this to a circle automatically -->
+        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/launcher_icon</item>
+        <!-- Icon background matches splash bg so the icon shape doesn't float oddly -->
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/launch_background_color</item>
+        <!-- Window background after the splash exits — must stay purple until Flutter draws -->
+        <item name="android:windowBackground">@drawable/launch_background</item>
+    </style>
+
+    <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">?android:colorBackground</item>
+    </style>
+</resources>
