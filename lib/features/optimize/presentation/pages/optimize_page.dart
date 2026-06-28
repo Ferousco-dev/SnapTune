@@ -167,17 +167,15 @@ class _OptimizePageState extends State<OptimizePage> {
                   ),
                 ),
 
-                // Platform cards
-                ...PlatformPreset.all.map(
-                  (preset) => _PlatformCard(
-                    preset: preset,
-                    isSelected: _selected == preset.id,
-                    isDark: isDark,
-                    onTap: () => setState(() {
-                      _selected = preset.id;
-                      _quality = preset.jpegQuality; // reset to platform default
-                    }),
-                  ),
+                // Platform grid
+                _PlatformGrid(
+                  presets: PlatformPreset.all,
+                  selected: _selected,
+                  isDark: isDark,
+                  onTap: (preset) => setState(() {
+                    _selected = preset.id;
+                    _quality = preset.jpegQuality;
+                  }),
                 ),
 
                 const SizedBox(height: AppSpacing.md),
@@ -476,13 +474,46 @@ String _formatDuration(int seconds) {
 }
 
 
-class _PlatformCard extends StatelessWidget {
+class _PlatformGrid extends StatelessWidget {
+  final List<PlatformPreset> presets;
+  final PlatformId selected;
+  final bool isDark;
+  final void Function(PlatformPreset) onTap;
+
+  const _PlatformGrid({
+    required this.presets,
+    required this.selected,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 10,
+      crossAxisSpacing: 10,
+      childAspectRatio: 1.15,
+      children: presets.map((preset) => _PlatformTile(
+        preset: preset,
+        isSelected: selected == preset.id,
+        isDark: isDark,
+        onTap: () => onTap(preset),
+      )).toList(),
+    );
+  }
+}
+
+
+class _PlatformTile extends StatelessWidget {
   final PlatformPreset preset;
   final bool isSelected;
   final bool isDark;
   final VoidCallback onTap;
 
-  const _PlatformCard({
+  const _PlatformTile({
     required this.preset,
     required this.isSelected,
     required this.isDark,
@@ -491,94 +522,63 @@ class _PlatformCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.md, vertical: 14),
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         decoration: BoxDecoration(
           color: isSelected
-              ? (isDark
-                  ? AppColors.darkSurfaceSelected
-                  : AppColors.surfaceSelected)
+              ? preset.color.withAlpha(isDark ? 30 : 18)
               : (isDark ? AppColors.darkSurface : AppColors.surface),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(
             color: isSelected
-                ? AppColors.primary
+                ? preset.color
                 : (isDark ? AppColors.darkOutline : AppColors.outline),
-            width: isSelected ? 1.5 : 0.5,
+            width: isSelected ? 1.8 : 0.5,
           ),
         ),
-        child: Row(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Platform icon
+            // Icon bubble
             Container(
-              width: 44,
-              height: 44,
+              width: 48,
+              height: 48,
               decoration: BoxDecoration(
-                color: preset.color.withAlpha(isDark ? 40 : 25),
-                borderRadius: BorderRadius.circular(12),
+                color: preset.color.withAlpha(isDark ? 50 : 30),
+                borderRadius: BorderRadius.circular(14),
               ),
-              child: FaIcon(preset.icon, color: preset.color, size: 20),
-            ),
-            const SizedBox(width: AppSpacing.md),
-
-            // Info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    preset.name,
-                    style: AppTypography.dmSans(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    preset.subtitle,
-                    style: AppTypography.dmSans(
-                      fontSize: 12,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    preset.specs,
-                    style: AppTypography.dmSans(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: preset.color,
-                    ),
-                  ),
-                ],
+              child: Center(
+                child: FaIcon(preset.icon, color: preset.color, size: 22),
               ),
             ),
-
-            // Selection indicator
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 22,
-              height: 22,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isSelected ? AppColors.primary : Colors.transparent,
-                border: Border.all(
-                  color: isSelected
-                      ? AppColors.primary
-                      : (isDark ? AppColors.darkMuted : AppColors.muted),
-                  width: 1.5,
-                ),
+            const SizedBox(height: 10),
+            // Platform name
+            Text(
+              preset.name,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.dmSans(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: isSelected
+                    ? preset.color
+                    : theme.colorScheme.onSurface,
               ),
-              child: isSelected
-                  ? const Icon(Icons.check_rounded,
-                      color: Colors.white, size: 13)
-                  : null,
+            ),
+            const SizedBox(height: 2),
+            // Specs line
+            Text(
+              preset.specs.split('·').last.trim(),
+              textAlign: TextAlign.center,
+              style: AppTypography.dmSans(
+                fontSize: 10,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),
