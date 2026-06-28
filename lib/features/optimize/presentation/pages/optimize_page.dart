@@ -105,6 +105,12 @@ class _OptimizePageState extends State<OptimizePage> {
       appBar: AppBar(
         backgroundColor: theme.scaffoldBackgroundColor,
         automaticallyImplyLeading: false,
+        leading: _hasPreSelected
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+                onPressed: () => context.pop(),
+              )
+            : null,
         title: Text(
           'Optimize',
           style: AppTypography.outfit(
