@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:share_plus/share_plus.dart';
@@ -521,7 +522,7 @@ class _PlatformCard extends StatelessWidget {
                 color: preset.color.withAlpha(isDark ? 40 : 25),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(preset.icon, color: preset.color, size: 22),
+              child: FaIcon(preset.icon, color: preset.color, size: 20),
             ),
             const SizedBox(width: AppSpacing.md),
 
