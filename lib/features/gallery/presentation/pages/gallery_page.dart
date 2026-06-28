@@ -332,18 +332,12 @@ class _GalleryViewState extends State<_GalleryView> {
                     child: CustomScrollView(
                       controller: _scrollController,
                     slivers: [
-                      _AppBar(
-                        isDark: isDark,
-                        onSearch: () => _openSearch(state.items),
-                        onMore: () => _showMoreMenu(context, state.items),
-                        onSettings: () => context.push(Routes.settings),
-                        sortNewest: _sortNewest,
-                        isSelecting: _isSelecting,
-                        selectedCount: _selectedIds.length,
-                        onCancelSelect: _clearSelection,
-                        onSelectAll: () => _selectAll(sorted),
-                        groupModeLabel: _groupModeLabel,
-                        onCycleGroup: _cycleGroupMode,
+                      // Spacer so content starts below the floating app bar
+                      SliverToBoxAdapter(
+                        child: SizedBox(
+                          height: kToolbarHeight +
+                              MediaQuery.of(context).padding.top,
+                        ),
                       ),
                       if (state.status == GalleryStatus.permissionDenied)
                         const SliverFillRemaining(
@@ -365,6 +359,25 @@ class _GalleryViewState extends State<_GalleryView> {
                   ),        // CustomScrollView
                   ),        // GestureDetector
 
+                  // Floating app bar — overlays content with frosted glass
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: _AppBar(
+                      isDark: isDark,
+                      onSearch: () => _openSearch(state.items),
+                      onMore: () => _showMoreMenu(context, state.items),
+                      onSettings: () => context.push(Routes.settings),
+                      sortNewest: _sortNewest,
+                      isSelecting: _isSelecting,
+                      selectedCount: _selectedIds.length,
+                      onCancelSelect: _clearSelection,
+                      onSelectAll: () => _selectAll(sorted),
+                      groupModeLabel: _groupModeLabel,
+                      onCycleGroup: _cycleGroupMode,
+                    ),
+                  ),
                   if (_isSelecting)
                     Positioned(
                       bottom: 0,
@@ -432,65 +445,91 @@ class _AppBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SliverAppBar(
-      floating: true,
-      snap: true,
-      elevation: 0,
-      scrolledUnderElevation: 0,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      leading: isSelecting
-          ? IconButton(
-              icon: const Icon(Icons.close_rounded),
-              color: Theme.of(context).colorScheme.onSurface,
-              onPressed: onCancelSelect,
-            )
-          : null,
-      automaticallyImplyLeading: false,
-      title: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 200),
-        child: isSelecting
-            ? Text(
-                '$selectedCount selected',
-                key: const ValueKey('select'),
-                style: AppTypography.outfit(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
-              )
-            : Text(
-                'Gallery',
-                key: const ValueKey('gallery'),
-                style: AppTypography.outfit(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w700,
-                  color: Theme.of(context).colorScheme.onSurface,
-                  letterSpacing: -0.3,
-                ),
-              ),
+    final topPad = MediaQuery.of(context).padding.top;
+    final base = isDark ? AppColors.darkBackground : Colors.white;
+
+    return Container(
+      height: kToolbarHeight + topPad + 28,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [base, base, base.withAlpha(0)],
+          stops: const [0.0, 0.62, 1.0],
+        ),
       ),
-      actions: isSelecting
-          ? [
-              TextButton(
-                onPressed: onSelectAll,
-                child: Text(
-                  'Select All',
-                  style: AppTypography.dmSans(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.primary,
-                  ),
+      child: Padding(
+        padding: EdgeInsets.only(top: topPad),
+        child: SizedBox(
+          height: kToolbarHeight,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              if (isSelecting)
+                IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  color: Theme.of(context).colorScheme.onSurface,
+                  onPressed: onCancelSelect,
+                )
+              else
+                const SizedBox(width: 16),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: isSelecting
+                      ? Align(
+                          key: const ValueKey('select'),
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            '$selectedCount selected',
+                            style: AppTypography.outfit(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                        )
+                      : Align(
+                          key: const ValueKey('gallery'),
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Gallery',
+                            style: AppTypography.outfit(
+                              fontSize: 26,
+                              fontWeight: FontWeight.w700,
+                              color: Theme.of(context).colorScheme.onSurface,
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                        ),
                 ),
               ),
-            ]
-          : [
-              IconButton(
-                icon: Icon(Icons.menu_rounded,
-                    color: Theme.of(context).colorScheme.onSurface),
-                onPressed: onSettings,
-              ),
+              if (isSelecting)
+                TextButton(
+                  onPressed: onSelectAll,
+                  child: Text(
+                    'Select All',
+                    style: AppTypography.dmSans(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                )
+              else
+                IconButton(
+                  style: IconButton.styleFrom(
+                    shape: const CircleBorder(),
+                  ),
+                  icon: Icon(Icons.more_vert_rounded,
+                      color: Theme.of(context).colorScheme.onSurface),
+                  onPressed: onSettings,
+                ),
               const SizedBox(width: 4),
             ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -853,31 +892,44 @@ class _FloatingFilterPills extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _Pill(
-          label: 'All',
-          isActive: true,
-          onTap: () => onFilter(null),
-        ),
-        const SizedBox(width: 10),
-        _Pill(
-          label: 'Album',
-          isActive: false,
-          onTap: () => context.go(Routes.albums),
-        ),
-      ],
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.black.withAlpha(200),
+        borderRadius: BorderRadius.circular(50),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(60),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _Segment(
+            label: 'All',
+            isActive: true,
+            onTap: () => onFilter(null),
+          ),
+          _Segment(
+            label: 'Album',
+            isActive: false,
+            onTap: () => context.go(Routes.albums),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _Pill extends StatelessWidget {
+class _Segment extends StatelessWidget {
   final String label;
   final bool isActive;
   final VoidCallback onTap;
 
-  const _Pill({
+  const _Segment({
     required this.label,
     required this.isActive,
     required this.onTap,
@@ -887,25 +939,19 @@ class _Pill extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
         decoration: BoxDecoration(
-          color: isActive ? AppColors.primary : Colors.white.withAlpha(220),
+          color: isActive ? Colors.white : Colors.transparent,
           borderRadius: BorderRadius.circular(50),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(30),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
         ),
         child: Text(
           label,
           style: AppTypography.dmSans(
             fontSize: 14,
             fontWeight: FontWeight.w600,
-            color: isActive ? Colors.white : const Color(0xFF1C1C1E),
+            color: isActive ? Colors.black : Colors.white,
           ),
         ),
       ),
