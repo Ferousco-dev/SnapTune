@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:ffmpeg_kit_flutter_min_gpl/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_min_gpl/ffprobe_kit.dart';
 import 'package:ffmpeg_kit_flutter_min_gpl/return_code.dart';
@@ -38,16 +39,25 @@ class VideoMetadata {
 
   int get longestSide => width >= height ? width : height;
 
+  // True if video has an audio track at all
+  bool get hasAudio => audioCodec.isNotEmpty;
+
   // WhatsApp re-encodes if any of these are false
   bool get videoCodecOk => videoCodec == 'h264';
-  bool get audioCodecOk => audioCodec == 'aac';
+  // No audio track = nothing to check; aac = OK
+  bool get audioCodecOk => !hasAudio || audioCodec == 'aac';
   bool get resolutionOk => longestSide <= 1280;
   bool get fpsOk => fps <= 60.0 && !isVfr;
   // 0 = undetectable (common on WhatsApp-received files) — treat as OK
   bool get videoBitrateOk => videoBitrateBps == 0 || videoBitrateBps <= 1_800_000;
-  bool get audioBitrateOk => audioBitrateBps == 0 || audioBitrateBps <= 160_000;
+  bool get audioBitrateOk =>
+      !hasAudio || audioBitrateBps == 0 || audioBitrateBps <= 160_000;
+  // 0 = undetectable — treat as OK
   bool get audioSampleRateOk =>
-      audioSampleRate == 44100 || audioSampleRate == 48000;
+      !hasAudio ||
+      audioSampleRate == 0 ||
+      audioSampleRate == 44100 ||
+      audioSampleRate == 48000;
 
   bool get isWhatsAppReady =>
       videoCodecOk &&
@@ -156,13 +166,12 @@ class _WhatsAppOptimizer {
         m.isVfr ||
         m.videoBitrateBps > _targetVideoBps;
 
-    // Audio needs re-encoding?
-    final reEncodeAudio =
-        !m.audioCodecOk || !m.audioBitrateOk || !m.audioSampleRateOk;
+    // Audio needs re-encoding? (skip entirely if no audio stream)
+    final reEncodeAudio = m.hasAudio &&
+        (!m.audioCodecOk || !m.audioBitrateOk || !m.audioSampleRateOk);
     if (reEncodeAudio) {
       reasons.add(
-          'Re-encode audio: ${m.audioCodec.isEmpty ? "unknown" : m.audioCodec}'
-          ' → AAC 128 kbps 44.1 kHz');
+          'Re-encode audio: ${m.audioCodec} → AAC 128 kbps 44.1 kHz');
     }
 
     // Split for WhatsApp Status
@@ -342,7 +351,7 @@ class VideoProcessor {
           ? vBps
           : (containerBps > aBps ? containerBps - aBps : containerBps);
 
-      return VideoMetadata(
+      final meta = VideoMetadata(
         videoCodec: videoStream.getCodec() ?? '',
         audioCodec: audioStream?.getCodec() ?? '',
         width: videoStream.getWidth() ?? 0,
@@ -359,7 +368,14 @@ class VideoProcessor {
             double.tryParse(info.getDuration() ?? '0') ?? 0.0,
         fileSizeBytes: await File(path).length(),
       );
-    } catch (_) {
+      debugPrint('[VP] probe: codec=${meta.videoCodec}/${meta.audioCodec} '
+          '${meta.width}x${meta.height} fps=${meta.fps.toStringAsFixed(2)} '
+          'isVfr=${meta.isVfr} vbr=${meta.videoBitrateBps} abr=${meta.audioBitrateBps} '
+          'sr=${meta.audioSampleRate} dur=${meta.durationSecs.toStringAsFixed(1)}s '
+          'ready=${meta.isWhatsAppReady}');
+      return meta;
+    } catch (e) {
+      debugPrint('[VP] probe failed: $e');
       return null;
     }
   }
@@ -405,6 +421,8 @@ class VideoProcessor {
         '-ar 44100',
         '-ac 2',
       ]);
+    } else if (!meta.hasAudio) {
+      parts.add('-an');
     } else {
       parts.add('-c:a copy');
     }
@@ -418,6 +436,7 @@ class VideoProcessor {
     ]);
 
     final cmd = parts.join(' ');
+    debugPrint('[VP] cmd: $cmd');
     final session = await FFmpegKit.executeAsync(
       cmd,
       null,
@@ -431,7 +450,13 @@ class VideoProcessor {
     );
 
     final rc = await session.getReturnCode();
-    return ReturnCode.isSuccess(rc);
+    final ok = ReturnCode.isSuccess(rc);
+    debugPrint('[VP] transcode: ${ok ? "OK" : "FAILED"} rc=$rc');
+    if (!ok) {
+      final logs = await session.getAllLogsAsString();
+      debugPrint('[VP] ffmpeg logs:\n$logs');
+    }
+    return ok;
   }
 
   // ─── VF filter ──────────────────────────────────────────────────────────────
@@ -440,11 +465,8 @@ class VideoProcessor {
     final filters = <String>[];
 
     if (meta.longestSide > 1280) {
-      // Scale longest side to ≤1280, keep aspect ratio, force even dims
-      filters.add(
-        "scale='if(gt(iw,ih),min(iw\\,1280),-2)'"
-        ":'if(gt(iw,ih),-2,min(ih\\,1280))'",
-      );
+      // Use pre-computed even dimensions from the plan (avoids complex FFmpeg expressions)
+      filters.add('scale=${plan.targetWidth}:${plan.targetHeight}');
     }
 
     // Cap at 60fps (WhatsApp limit) or convert VFR; don't touch CFR ≤60fps
