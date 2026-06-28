@@ -1,4 +1,6 @@
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
 import '../models/media_item_model.dart';
 
@@ -15,6 +17,10 @@ abstract interface class GalleryLocalDatasource {
 class GalleryLocalDatasourceImpl implements GalleryLocalDatasource {
   @override
   Future<bool> requestPermission() async {
+    // Request audio permission on Android 13+ (needed for FFmpegKit to read audio tracks)
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      await Permission.audio.request();
+    }
     final result = await PhotoManager.requestPermissionExtend();
     return result.isAuth || result == PermissionState.limited;
   }
