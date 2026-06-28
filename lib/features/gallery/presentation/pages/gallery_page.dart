@@ -48,27 +48,41 @@ class _GalleryViewState extends State<_GalleryView> {
   final Set<String> _selectedIds = {};
   final _shareButtonKey = GlobalKey();
 
-  // Pinch-to-zoom grid
+  // Pinch-to-zoom grid — tracked via raw pointer count so the scroll view
+  // can't win the gesture arena when two fingers are on screen.
+  int _pointerCount = 0;
   int _pinchStartColumns = 3;
-  bool _isPinching = false;
 
-  void _onScaleStart(ScaleStartDetails details) {
-    if (details.pointerCount < 2) return;
-    _pinchStartColumns = sl<GridColumnsNotifier>().value;
-    _isPinching = true;
+  void _onPointerDown(PointerDownEvent _) {
+    _pointerCount++;
+    if (_pointerCount == 2) {
+      // Snapshot columns the instant the second finger lands.
+      _pinchStartColumns = sl<GridColumnsNotifier>().value;
+      setState(() {}); // switch to NeverScrollableScrollPhysics
+    }
+  }
+
+  void _onPointerUp(PointerUpEvent _) {
+    final wasMulti = _pointerCount >= 2;
+    _pointerCount = (_pointerCount - 1).clamp(0, 10);
+    if (wasMulti) setState(() {}); // re-enable scroll
+  }
+
+  void _onPointerCancel(PointerCancelEvent _) {
+    final wasMulti = _pointerCount >= 2;
+    _pointerCount = (_pointerCount - 1).clamp(0, 10);
+    if (wasMulti) setState(() {});
   }
 
   void _onScaleUpdate(ScaleUpdateDetails details) {
-    if (!_isPinching || details.pointerCount < 2) return;
-    // Pinch in (scale < 1) = more columns; pinch out (scale > 1) = fewer
+    if (_pointerCount < 2) return;
+    // Pinch in (scale < 1) → more columns; pinch out (scale > 1) → fewer
     final next = (_pinchStartColumns / details.scale).round().clamp(2, 5);
     if (next != sl<GridColumnsNotifier>().value) {
       HapticFeedback.selectionClick();
       sl<GridColumnsNotifier>().setColumns(next);
     }
   }
-
-  void _onScaleEnd(ScaleEndDetails details) => _isPinching = false;
 
   bool get _isSelecting => _selectedIds.isNotEmpty;
 
@@ -324,13 +338,21 @@ class _GalleryViewState extends State<_GalleryView> {
               final sorted = _sorted(state.items);
               return Stack(
                 children: [
-                  GestureDetector(
+                  Listener(
                     behavior: HitTestBehavior.translucent,
-                    onScaleStart: _onScaleStart,
+                    onPointerDown: _onPointerDown,
+                    onPointerUp: _onPointerUp,
+                    onPointerCancel: _onPointerCancel,
+                    child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
                     onScaleUpdate: _onScaleUpdate,
-                    onScaleEnd: _onScaleEnd,
                     child: CustomScrollView(
                       controller: _scrollController,
+                      // Disable scroll while two fingers are on screen so the
+                      // scroll view exits the gesture arena and pinch wins.
+                      physics: _pointerCount >= 2
+                          ? const NeverScrollableScrollPhysics()
+                          : const AlwaysScrollableScrollPhysics(),
                     slivers: [
                       // Spacer so content starts below the floating app bar
                       SliverToBoxAdapter(
@@ -358,6 +380,7 @@ class _GalleryViewState extends State<_GalleryView> {
                     ],
                   ),        // CustomScrollView
                   ),        // GestureDetector
+                  ),        // Listener
 
                   // Floating app bar — overlays content with frosted glass
                   Positioned(
@@ -369,6 +392,8 @@ class _GalleryViewState extends State<_GalleryView> {
                       onSearch: () => _openSearch(state.items),
                       onMore: () => _showMoreMenu(context, state.items),
                       onSettings: () => context.push(Routes.settings),
+                      onToggleSort: () =>
+                          setState(() => _sortNewest = !_sortNewest),
                       sortNewest: _sortNewest,
                       isSelecting: _isSelecting,
                       selectedCount: _selectedIds.length,
@@ -422,6 +447,7 @@ class _AppBar extends StatelessWidget {
   final VoidCallback onSearch;
   final VoidCallback onMore;
   final VoidCallback onSettings;
+  final VoidCallback onToggleSort;
   final bool isSelecting;
   final int selectedCount;
   final VoidCallback onCancelSelect;
@@ -434,6 +460,7 @@ class _AppBar extends StatelessWidget {
     required this.onSearch,
     required this.onMore,
     required this.onSettings,
+    required this.onToggleSort,
     required this.sortNewest,
     required this.isSelecting,
     required this.selectedCount,
@@ -516,7 +543,49 @@ class _AppBar extends StatelessWidget {
                     ),
                   ),
                 )
-              else
+              else ...[
+                // Sort chip — tap to toggle Newest / Oldest
+                GestureDetector(
+                  onTap: onToggleSort,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? AppColors.darkSurfaceVariant
+                          : AppColors.surfaceVariant,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: isDark
+                            ? AppColors.darkOutline
+                            : AppColors.outline,
+                        width: 0.5,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          sortNewest
+                              ? Icons.arrow_downward_rounded
+                              : Icons.arrow_upward_rounded,
+                          size: 12,
+                          color: AppColors.primary,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          sortNewest ? 'Newest' : 'Oldest',
+                          style: AppTypography.dmSans(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
                 IconButton(
                   style: IconButton.styleFrom(
                     shape: const CircleBorder(),
@@ -525,6 +594,7 @@ class _AppBar extends StatelessWidget {
                       color: Theme.of(context).colorScheme.onSurface),
                   onPressed: onSettings,
                 ),
+              ],
               const SizedBox(width: 4),
             ],
           ),
