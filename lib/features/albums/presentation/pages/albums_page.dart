@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -89,83 +88,29 @@ class _AlbumsPageState extends State<AlbumsPage> {
     });
   }
 
-  Future<void> _showCreateAlbumDialog() async {
-    final name = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => _CreateAlbumSheet(),
-    );
-    if (name == null || name.isEmpty) return;
-    if (!Platform.isIOS && !Platform.isMacOS) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Album creation is only supported on iOS'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-      return;
-    }
-    try {
-      await PhotoManager.editor.darwin.createAlbum(name);
-      _load();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Could not create album: $e'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final theme = Theme.of(context);
 
+    final topPad = MediaQuery.of(context).padding.top;
+    final appBarBg = isDark
+        ? AppColors.darkBackground.withAlpha(210)
+        : Colors.white.withAlpha(210);
+
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showCreateAlbumDialog,
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: const Icon(Icons.add_rounded),
-      ),
-      appBar: AppBar(
-        backgroundColor: theme.scaffoldBackgroundColor,
-        automaticallyImplyLeading: false,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-          onPressed: () => context.go(Routes.gallery),
-        ),
-        title: Text(
-          'Albums',
-          style: AppTypography.outfit(
-            fontSize: 26,
-            fontWeight: FontWeight.w700,
-            color: theme.colorScheme.onSurface,
-            letterSpacing: -0.3,
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.menu_rounded,
-                color: theme.colorScheme.onSurface),
-            onPressed: () => context.push(Routes.settings),
-          ),
-          const SizedBox(width: 4),
-        ],
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : CustomScrollView(
+      body: Stack(
+        children: [
+          if (_loading)
+            const Center(child: CircularProgressIndicator())
+          else
+            CustomScrollView(
               slivers: [
+                // Spacer so content starts below the floating app bar
+                SliverToBoxAdapter(
+                  child: SizedBox(height: kToolbarHeight + topPad),
+                ),
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(
@@ -213,170 +158,142 @@ class _AlbumsPageState extends State<AlbumsPage> {
                       ),
                     ),
                   ),
+                const SliverToBoxAdapter(child: SizedBox(height: 88)),
               ],
             ),
+          // Floating app bar — gradient fade (opaque → transparent)
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              height: kToolbarHeight + topPad + 28,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    appBarBg.withAlpha(255),
+                    appBarBg.withAlpha(255),
+                    appBarBg.withAlpha(0),
+                  ],
+                  stops: const [0.0, 0.62, 1.0],
+                ),
+              ),
+              child: Padding(
+                padding: EdgeInsets.only(top: topPad),
+                child: SizedBox(
+                  height: kToolbarHeight,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Text(
+                          'Albums',
+                          style: AppTypography.outfit(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w700,
+                            color: theme.colorScheme.onSurface,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        style: IconButton.styleFrom(
+                          shape: const CircleBorder(),
+                        ),
+                        icon: Icon(Icons.more_vert_rounded,
+                            color: theme.colorScheme.onSurface),
+                        onPressed: () => context.push(Routes.settings),
+                      ),
+                      const SizedBox(width: 4),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // Floating pills
+          Positioned(
+            bottom: MediaQuery.of(context).padding.bottom + 12,
+            left: 0,
+            right: 0,
+            child: const Center(child: _FloatingFilterPills()),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _CreateAlbumSheet extends StatefulWidget {
-  @override
-  State<_CreateAlbumSheet> createState() => _CreateAlbumSheetState();
-}
-
-class _CreateAlbumSheetState extends State<_CreateAlbumSheet> {
-  final _ctrl = TextEditingController();
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    final name = _ctrl.text.trim();
-    Navigator.pop(context, name);
-  }
+class _FloatingFilterPills extends StatelessWidget {
+  const _FloatingFilterPills();
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final theme = Theme.of(context);
-    final bottom = MediaQuery.of(context).viewInsets.bottom;
-
     return Container(
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-      padding: EdgeInsets.fromLTRB(24, 20, 24, 24 + bottom),
+      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurface : Colors.white,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Drag handle
-          Center(
-            child: Container(
-              width: 36,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 20),
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.darkOutline : AppColors.outlineVariant,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-
-          Text(
-            'New Album',
-            style: AppTypography.outfit(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: theme.colorScheme.onSurface,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Give your album a name',
-            style: AppTypography.dmSans(
-              fontSize: 13,
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Name field
-          Container(
-            decoration: BoxDecoration(
-              color: isDark
-                  ? AppColors.darkSurfaceVariant
-                  : AppColors.surfaceVariant,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: TextField(
-              controller: _ctrl,
-              autofocus: true,
-              textCapitalization: TextCapitalization.words,
-              onSubmitted: (_) => _submit(),
-              style: AppTypography.dmSans(
-                fontSize: 15,
-                color: theme.colorScheme.onSurface,
-              ),
-              decoration: InputDecoration(
-                hintText: 'e.g. Summer 2025',
-                hintStyle: AppTypography.dmSans(
-                  fontSize: 15,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 14),
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Buttons
-          Row(
-            children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => Navigator.pop(context, null),
-                  child: Container(
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? AppColors.darkSurfaceVariant
-                          : AppColors.surfaceVariant,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Center(
-                      child: Text(
-                        'Cancel',
-                        style: AppTypography.dmSans(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: theme.colorScheme.onSurface,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: GestureDetector(
-                  onTap: _submit,
-                  child: Container(
-                    height: 50,
-                    decoration: BoxDecoration(
-                      gradient: AppColors.brandGradient,
-                      borderRadius: BorderRadius.circular(14),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withAlpha(70),
-                          blurRadius: 16,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Center(
-                      child: Text(
-                        'Create',
-                        style: AppTypography.dmSans(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
+        color: Colors.black.withAlpha(200),
+        borderRadius: BorderRadius.circular(50),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(60),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
           ),
         ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _Segment(
+            label: 'All',
+            isActive: false,
+            onTap: () => context.go(Routes.gallery),
+          ),
+          _Segment(
+            label: 'Album',
+            isActive: true,
+            onTap: () {},
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Segment extends StatelessWidget {
+  final String label;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _Segment({
+    required this.label,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
+        decoration: BoxDecoration(
+          color: isActive ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(50),
+        ),
+        child: Text(
+          label,
+          style: AppTypography.dmSans(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: isActive ? Colors.black : Colors.white,
+          ),
+        ),
       ),
     );
   }
