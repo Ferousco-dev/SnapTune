@@ -398,6 +398,12 @@ class _VideoViewerState extends State<_VideoViewer>
       setState(() => _showVolume = !_showVolume);
 
   @override
+  void deactivate() {
+    _controller?.pause();
+    super.deactivate();
+  }
+
+  @override
   void dispose() {
     _controller?.dispose();
     super.dispose();
