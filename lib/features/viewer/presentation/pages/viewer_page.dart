@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:photo_manager/photo_manager.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:video_player/video_player.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../../core/router/routes.dart';
@@ -116,7 +115,7 @@ class _ViewerPageState extends State<ViewerPage> {
     final dismissOpacity = 1.0 - dragProgress;
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Transform.translate(
         offset: Offset(0, _dragOffset),
         child: Opacity(
@@ -802,20 +801,7 @@ class _ViewerOptionsSheet extends StatelessWidget {
               );
             },
           ),
-          _SheetOption(
-            icon: Icons.share_rounded,
-            label: 'Share original',
-            isDark: isDark,
-            onTap: () async {
-              Navigator.pop(context);
-              try {
-                final asset = await AssetEntity.fromId(item.id);
-                final file = await asset?.file;
-                if (file == null) return;
-                await Share.shareXFiles([XFile(file.path)]);
-              } catch (_) {}
-            },
-          ),
+
 
           _Divider(isDark: isDark),
 
