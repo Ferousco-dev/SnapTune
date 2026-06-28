@@ -7,6 +7,7 @@ import 'package:photo_manager/photo_manager.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../../core/services/grid_columns_notifier.dart';
+import '../../../../core/services/group_mode_notifier.dart';
 import '../../../../core/router/routes.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../viewer/presentation/pages/viewer_page.dart';
@@ -32,8 +33,6 @@ class GalleryPage extends StatelessWidget {
   }
 }
 
-enum _GroupMode { day, month, year }
-
 class _GalleryView extends StatefulWidget {
   const _GalleryView();
 
@@ -44,7 +43,6 @@ class _GalleryView extends StatefulWidget {
 class _GalleryViewState extends State<_GalleryView> {
   final _scrollController = ScrollController();
   bool _sortNewest = true;
-  _GroupMode _groupMode = _GroupMode.month;
   final Set<String> _selectedIds = {};
   final _shareButtonKey = GlobalKey();
 
@@ -232,16 +230,17 @@ class _GalleryViewState extends State<_GalleryView> {
     });
   }
 
-  Map<String, List<MediaItem>> _groupItems(List<MediaItem> items) {
+  Map<String, List<MediaItem>> _groupItems(
+      List<MediaItem> items, GroupMode groupMode) {
     final result = <String, List<MediaItem>>{};
     for (final item in items) {
       final String key;
-      switch (_groupMode) {
-        case _GroupMode.day:
+      switch (groupMode) {
+        case GroupMode.day:
           key = DateFormat('EEEE, d MMMM yyyy').format(item.createDate);
-        case _GroupMode.month:
+        case GroupMode.month:
           key = DateFormat('MMMM yyyy').format(item.createDate);
-        case _GroupMode.year:
+        case GroupMode.year:
           key = DateFormat('yyyy').format(item.createDate);
       }
       result.putIfAbsent(key, () => []).add(item);
@@ -249,32 +248,23 @@ class _GalleryViewState extends State<_GalleryView> {
     return result;
   }
 
-  void _cycleGroupMode() {
-    setState(() {
-      _groupMode = switch (_groupMode) {
-        _GroupMode.day => _GroupMode.month,
-        _GroupMode.month => _GroupMode.year,
-        _GroupMode.year => _GroupMode.day,
-      };
-    });
-    HapticFeedback.selectionClick();
-  }
-
-  String get _groupModeLabel => switch (_groupMode) {
-        _GroupMode.day => 'Day',
-        _GroupMode.month => 'Month',
-        _GroupMode.year => 'Year',
-      };
-
   List<Widget> _buildSectionSlivers(
-      List<MediaItem> sorted, int crossAxisCount) {
-    final grouped = _groupItems(sorted);
+      List<MediaItem> sorted, int crossAxisCount, GroupMode groupMode) {
+    final grouped = _groupItems(sorted, groupMode);
     final slivers = <Widget>[];
+    bool isFirst = true;
     for (final entry in grouped.entries) {
+      if (!isFirst) {
+        // Visual gap between sections so groups don't blur together
+        slivers.add(const SliverToBoxAdapter(child: SizedBox(height: 20)));
+      }
       slivers.add(SliverToBoxAdapter(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.md, AppSpacing.md, AppSpacing.md, AppSpacing.sm,
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            isFirst ? AppSpacing.md : 0,
+            AppSpacing.md,
+            AppSpacing.sm,
           ),
           child: Text(
             entry.key,
@@ -320,6 +310,7 @@ class _GalleryViewState extends State<_GalleryView> {
           childCount: entry.value.length,
         ),
       ));
+      isFirst = false;
     }
     return slivers;
   }
@@ -333,6 +324,9 @@ class _GalleryViewState extends State<_GalleryView> {
       body: ValueListenableBuilder<int>(
         valueListenable: sl<GridColumnsNotifier>(),
         builder: (context, crossAxisCount, _) {
+          return ValueListenableBuilder<GroupMode>(
+            valueListenable: sl<GroupModeNotifier>(),
+            builder: (context, groupMode, _) {
           return BlocBuilder<GalleryBloc, GalleryState>(
             builder: (context, state) {
               final sorted = _sorted(state.items);
@@ -370,7 +364,7 @@ class _GalleryViewState extends State<_GalleryView> {
                       else if (state.isEmpty)
                         const SliverFillRemaining(child: _EmptyView())
                       else ...[
-                        ..._buildSectionSlivers(sorted, crossAxisCount),
+                        ..._buildSectionSlivers(sorted, crossAxisCount, groupMode),
                         if (state.hasMore && state.isLoaded)
                           const SliverToBoxAdapter(
                               child: _LoadMoreIndicator()),
@@ -399,8 +393,6 @@ class _GalleryViewState extends State<_GalleryView> {
                       selectedCount: _selectedIds.length,
                       onCancelSelect: _clearSelection,
                       onSelectAll: () => _selectAll(sorted),
-                      groupModeLabel: _groupModeLabel,
-                      onCycleGroup: _cycleGroupMode,
                     ),
                   ),
                   if (_isSelecting)
@@ -434,6 +426,8 @@ class _GalleryViewState extends State<_GalleryView> {
               );
             },
           );
+            },           // ValueListenableBuilder<GroupMode>
+          );
         },
       ),
     );
@@ -452,8 +446,6 @@ class _AppBar extends StatelessWidget {
   final int selectedCount;
   final VoidCallback onCancelSelect;
   final VoidCallback onSelectAll;
-  final String groupModeLabel;
-  final VoidCallback onCycleGroup;
 
   const _AppBar({
     required this.isDark,
@@ -466,8 +458,6 @@ class _AppBar extends StatelessWidget {
     required this.selectedCount,
     required this.onCancelSelect,
     required this.onSelectAll,
-    required this.groupModeLabel,
-    required this.onCycleGroup,
   });
 
   @override
