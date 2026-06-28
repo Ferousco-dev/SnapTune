@@ -7,6 +7,7 @@ import 'package:photo_manager/photo_manager.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../../core/services/grid_columns_notifier.dart';
+import '../../../../core/services/group_mode_notifier.dart';
 import '../../../../core/services/theme_notifier.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
@@ -53,6 +54,17 @@ class _SettingsPageState extends State<SettingsPage> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (_) => _GridSheet(isDark: isDark),
+    );
+  }
+
+  void _showGroupSheet(BuildContext context, bool isDark) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: isDark ? AppColors.darkSurface : AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => _GroupSheet(isDark: isDark),
     );
   }
 
@@ -108,7 +120,10 @@ class _SettingsPageState extends State<SettingsPage> {
       _ => 'Follow system',
     };
 
-    return ValueListenableBuilder<int>(
+    return ValueListenableBuilder<GroupMode>(
+      valueListenable: sl<GroupModeNotifier>(),
+      builder: (context, groupMode, _) =>
+      ValueListenableBuilder<int>(
       valueListenable: sl<GridColumnsNotifier>(),
       builder: (context, cols, _) => Scaffold(
         backgroundColor: theme.scaffoldBackgroundColor,
@@ -163,6 +178,21 @@ class _SettingsPageState extends State<SettingsPage> {
                   trailing: const Icon(Icons.chevron_right_rounded,
                       size: 20, color: AppColors.muted),
                   onTap: () => _showGridSheet(context, isDark),
+                ),
+                _TileDivider(isDark: isDark),
+                _SettingsTile(
+                  isDark: isDark,
+                  icon: Icons.calendar_view_month_rounded,
+                  iconColor: AppColors.violet,
+                  title: 'Group photos by',
+                  subtitle: switch (groupMode) {
+                    GroupMode.day => 'Day',
+                    GroupMode.month => 'Month',
+                    GroupMode.year => 'Year',
+                  },
+                  trailing: const Icon(Icons.chevron_right_rounded,
+                      size: 20, color: AppColors.muted),
+                  onTap: () => _showGroupSheet(context, isDark),
                 ),
               ],
             ),
@@ -221,7 +251,8 @@ class _SettingsPageState extends State<SettingsPage> {
           ],
         ),
       ),
-    );
+    ),   // ValueListenableBuilder<int>
+    );   // ValueListenableBuilder<GroupMode>
   }
 }
 
@@ -676,6 +707,82 @@ class _GridSheet extends StatelessWidget {
               label: '4 columns',
               selected: current == 4,
               onTap: () => pick(4),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+class _GroupSheet extends StatelessWidget {
+  final bool isDark;
+  const _GroupSheet({required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    final current = sl<GroupModeNotifier>().value;
+
+    void pick(GroupMode mode) {
+      sl<GroupModeNotifier>().setMode(mode);
+      Navigator.pop(context);
+    }
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          AppSpacing.md,
+          AppSpacing.md,
+          AppSpacing.lg,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? AppColors.darkOutline
+                      : AppColors.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'Group photos by',
+              style: AppTypography.outfit(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _SheetOption(
+              isDark: isDark,
+              icon: Icons.calendar_today_rounded,
+              label: 'Day',
+              selected: current == GroupMode.day,
+              onTap: () => pick(GroupMode.day),
+            ),
+            _SheetOption(
+              isDark: isDark,
+              icon: Icons.calendar_view_month_rounded,
+              label: 'Month',
+              selected: current == GroupMode.month,
+              onTap: () => pick(GroupMode.month),
+            ),
+            _SheetOption(
+              isDark: isDark,
+              icon: Icons.date_range_rounded,
+              label: 'Year',
+              selected: current == GroupMode.year,
+              onTap: () => pick(GroupMode.year),
             ),
           ],
         ),
