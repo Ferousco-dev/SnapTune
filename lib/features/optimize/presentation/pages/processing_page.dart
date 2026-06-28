@@ -80,28 +80,30 @@ class _ProcessingPageState extends State<ProcessingPage>
         final asset = await AssetEntity.fromId(item!.id);
         debugPrint('[PP] asset lookup id=${item.id} → ${asset == null ? "NULL" : "ok"}');
 
-        // Try file first, then originFile as fallback (handles some Android paths)
+        // Try file first, then originFile, then content URI (covers all Android storage models)
         File? file = await asset?.file;
         if (file == null && asset != null) {
-          debugPrint('[PP] file is null, trying originFile');
+          debugPrint('[PP] file null, trying originFile');
           file = await asset.originFile;
         }
-        debugPrint('[PP] file path: ${file?.path ?? "NULL"}');
 
-        if (file == null) {
-          debugPrint('[PP] both file and originFile returned null — falling through to passthrough');
-          _setStep(3, 1.0);
-          await Future.delayed(const Duration(milliseconds: 300));
+        String? inputPath = file?.absolute.path;
+
+        if (inputPath == null && asset != null) {
+          debugPrint('[PP] originFile null, trying content URI');
+          inputPath = await asset.getMediaUrl();
+          debugPrint('[PP] content URI: $inputPath');
+        }
+
+        if (inputPath == null) {
+          debugPrint('[PP] all file retrieval methods failed');
           if (!mounted) return;
-          context.pushReplacement(
-            Routes.result,
-            extra: ResultArgs(preset: preset, item: item),
-          );
+          setState(() => _errorMsg = 'Could not read this video. Try a different one.');
           return;
         }
 
         final result = await VideoProcessor().process(
-          inputPath: file.absolute.path,
+          inputPath: inputPath,
           onProgress: (p) {
             if (!mounted) return;
             // Map 0→1 progress across steps 0→2
