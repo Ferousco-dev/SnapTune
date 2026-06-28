@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:photo_manager/photo_manager.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../../core/services/grid_columns_notifier.dart';
@@ -11,7 +11,6 @@ import '../../../../core/services/theme_notifier.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/constants/app_spacing.dart';
-import '../../../optimize/domain/entities/platform_preset.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -21,80 +20,18 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  String _defaultPlatformId = 'whatsapp';
-  String _qualityMode = 'Balanced';
   String _version = '';
 
   @override
   void initState() {
     super.initState();
-    _loadPrefs();
     _loadVersion();
-  }
-
-  Future<void> _loadPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (!mounted) return;
-    setState(() {
-      _defaultPlatformId =
-          prefs.getString('default_platform') ?? 'whatsapp';
-      _qualityMode = prefs.getString('quality_mode') ?? 'Balanced';
-    });
   }
 
   Future<void> _loadVersion() async {
     final info = await PackageInfo.fromPlatform();
     if (!mounted) return;
     setState(() => _version = info.version);
-  }
-
-  Future<void> _setDefaultPlatform(String id) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('default_platform', id);
-    if (mounted) setState(() => _defaultPlatformId = id);
-  }
-
-  Future<void> _setQualityMode(String mode) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('quality_mode', mode);
-    if (mounted) setState(() => _qualityMode = mode);
-  }
-
-  String get _defaultPlatformName => PlatformPreset.all
-      .firstWhere(
-        (p) => p.id.name == _defaultPlatformId,
-        orElse: () => PlatformPreset.all.first,
-      )
-      .name;
-
-  void _showPlatformSheet(BuildContext context, bool isDark) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _PlatformSheet(
-        isDark: isDark,
-        currentId: _defaultPlatformId,
-        onPick: (id) {
-          _setDefaultPlatform(id);
-          Navigator.pop(context);
-        },
-      ),
-    );
-  }
-
-  void _showQualitySheet(BuildContext context, bool isDark) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _QualitySheet(
-        isDark: isDark,
-        current: _qualityMode,
-        onPick: (mode) {
-          _setQualityMode(mode);
-          Navigator.pop(context);
-        },
-      ),
-    );
   }
 
   void _showAppearanceSheet(BuildContext context, bool isDark) {
@@ -208,7 +145,7 @@ class _SettingsPageState extends State<SettingsPage> {
               children: [
                 _SettingsTile(
                   isDark: isDark,
-                  icon: Icons.palette_outlined,
+                  icon: Icons.contrast_rounded,
                   iconColor: AppColors.violet,
                   title: 'Appearance',
                   subtitle: appearanceSubtitle,
@@ -219,7 +156,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 _TileDivider(isDark: isDark),
                 _SettingsTile(
                   isDark: isDark,
-                  icon: Icons.grid_view_rounded,
+                  icon: Icons.border_all_rounded,
                   iconColor: AppColors.primary,
                   title: 'Grid columns',
                   subtitle: '$cols columns',
@@ -237,7 +174,7 @@ class _SettingsPageState extends State<SettingsPage> {
               children: [
                 _SettingsTile(
                   isDark: isDark,
-                  icon: Icons.cleaning_services_outlined,
+                  icon: Icons.delete_sweep_outlined,
                   iconColor: AppColors.primary,
                   title: 'Clear cache',
                   subtitle: 'Remove temporary files',
@@ -253,16 +190,17 @@ class _SettingsPageState extends State<SettingsPage> {
               children: [
                 _SettingsTile(
                   isDark: isDark,
-                  icon: Icons.chat_bubble_outline_rounded,
-                  iconColor: AppColors.violet,
+                  icon: FontAwesomeIcons.whatsapp,
+                  iconColor: const Color(0xFF25D366),
                   title: 'Send feedback',
                   subtitle: 'Chat with us on WhatsApp',
                   onTap: _sendFeedback,
+                  isBrand: true,
                 ),
                 _TileDivider(isDark: isDark),
                 _SettingsTile(
                   isDark: isDark,
-                  icon: Icons.privacy_tip_outlined,
+                  icon: Icons.shield_outlined,
                   iconColor: AppColors.primary,
                   title: 'Privacy policy',
                   trailing: const Icon(Icons.chevron_right_rounded,
@@ -272,7 +210,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 _TileDivider(isDark: isDark),
                 _SettingsTile(
                   isDark: isDark,
-                  icon: Icons.info_outline_rounded,
+                  icon: Icons.tag_rounded,
                   iconColor: isDark ? AppColors.darkMuted : AppColors.muted,
                   title: 'Version',
                   subtitle: _version.isEmpty ? '...' : _version,
@@ -282,257 +220,6 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-
-class _PlatformSheet extends StatelessWidget {
-  final bool isDark;
-  final String currentId;
-  final void Function(String id) onPick;
-
-  const _PlatformSheet({
-    required this.isDark,
-    required this.currentId,
-    required this.onPick,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurface : Colors.white,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Container(
-              width: 36,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 18),
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.darkOutline : AppColors.outlineVariant,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          Text(
-            'Default platform',
-            style: AppTypography.outfit(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: theme.colorScheme.onSurface,
-            ),
-          ),
-          Text(
-            'Used as the preset when you open Optimize',
-            style: AppTypography.dmSans(
-              fontSize: 13,
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 16),
-          ...PlatformPreset.all.map((preset) {
-            final selected = preset.id.name == currentId;
-            return InkWell(
-              onTap: () => onPick(preset.id.name),
-              borderRadius: BorderRadius.circular(12),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 4, vertical: 12),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: preset.color.withAlpha(isDark ? 40 : 22),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(preset.icon,
-                          color: preset.color, size: 18),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            preset.name,
-                            style: AppTypography.dmSans(
-                              fontSize: 14,
-                              fontWeight: selected
-                                  ? FontWeight.w600
-                                  : FontWeight.w500,
-                              color: selected
-                                  ? AppColors.primary
-                                  : theme.colorScheme.onSurface,
-                            ),
-                          ),
-                          Text(
-                            preset.specs,
-                            style: AppTypography.dmSans(
-                              fontSize: 11,
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (selected)
-                      const Icon(Icons.check_rounded,
-                          color: AppColors.primary, size: 18),
-                  ],
-                ),
-              ),
-            );
-          }),
-          SizedBox(
-              height: MediaQuery.of(context).padding.bottom + 4),
-        ],
-      ),
-    );
-  }
-}
-
-
-class _QualitySheet extends StatelessWidget {
-  final bool isDark;
-  final String current;
-  final void Function(String) onPick;
-
-  const _QualitySheet({
-    required this.isDark,
-    required this.current,
-    required this.onPick,
-  });
-
-  static const _options = [
-    (
-      label: 'Balanced',
-      subtitle: 'Good quality, smaller files',
-      icon: Icons.balance_rounded,
-    ),
-    (
-      label: 'High quality',
-      subtitle: 'Larger files, better detail',
-      icon: Icons.hd_rounded,
-    ),
-    (
-      label: 'Max quality',
-      subtitle: 'Largest files, no compression loss',
-      icon: Icons.star_rounded,
-    ),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurface : Colors.white,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Container(
-              width: 36,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 18),
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.darkOutline : AppColors.outlineVariant,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          Text(
-            'Quality mode',
-            style: AppTypography.outfit(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: theme.colorScheme.onSurface,
-            ),
-          ),
-          Text(
-            'Affects output file size when optimizing',
-            style: AppTypography.dmSans(
-              fontSize: 13,
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 16),
-          ..._options.map((opt) {
-            final selected = opt.label == current;
-            return InkWell(
-              onTap: () => onPick(opt.label),
-              borderRadius: BorderRadius.circular(12),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 4, vertical: 12),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: AppColors.coral
-                            .withAlpha(isDark ? 40 : 22),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(opt.icon,
-                          color: AppColors.coral, size: 18),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            opt.label,
-                            style: AppTypography.dmSans(
-                              fontSize: 14,
-                              fontWeight: selected
-                                  ? FontWeight.w600
-                                  : FontWeight.w500,
-                              color: selected
-                                  ? AppColors.primary
-                                  : theme.colorScheme.onSurface,
-                            ),
-                          ),
-                          Text(
-                            opt.subtitle,
-                            style: AppTypography.dmSans(
-                              fontSize: 11,
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (selected)
-                      const Icon(Icons.check_rounded,
-                          color: AppColors.primary, size: 18),
-                  ],
-                ),
-              ),
-            );
-          }),
-          SizedBox(
-              height: MediaQuery.of(context).padding.bottom + 4),
-        ],
       ),
     );
   }
@@ -582,12 +269,6 @@ class _PrivacySheet extends StatelessWidget {
             title: 'Your data stays on your device',
             body:
                 'SnapTune processes all photos and videos entirely on-device. No media, metadata, or personal information is ever uploaded to external servers.',
-          ),
-          _PrivacySection(
-            isDark: isDark,
-            title: 'Face detection',
-            body:
-                'The People feature uses on-device ML (Google ML Kit) to detect faces. Face data is never stored persistently and never leaves your device.',
           ),
           _PrivacySection(
             isDark: isDark,
@@ -756,6 +437,7 @@ class _SettingsTile extends StatelessWidget {
   final String? subtitle;
   final Widget? trailing;
   final VoidCallback? onTap;
+  final bool isBrand;
 
   const _SettingsTile({
     required this.isDark,
@@ -765,6 +447,7 @@ class _SettingsTile extends StatelessWidget {
     this.subtitle,
     this.trailing,
     this.onTap,
+    this.isBrand = false,
   });
 
   @override
@@ -789,7 +472,9 @@ class _SettingsTile extends StatelessWidget {
                   color: iconColor.withAlpha(isDark ? 40 : 22),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, color: iconColor, size: 18),
+                child: isBrand
+                    ? FaIcon(icon, color: iconColor, size: 16)
+                    : Icon(icon, color: iconColor, size: 18),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
