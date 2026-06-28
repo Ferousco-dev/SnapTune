@@ -239,7 +239,7 @@ class VideoProcessor {
     required String inputPath,
     void Function(double progress)? onProgress,
   }) async {
-    final originalSize = await File(inputPath).length();
+    final originalSize = await _fileSizeOf(inputPath);
     onProgress?.call(0.05);
 
     final meta = await _probe(inputPath);
@@ -366,7 +366,7 @@ class VideoProcessor {
             int.tryParse(aProps?['channels']?.toString() ?? '0') ?? 0,
         durationSecs:
             double.tryParse(info.getDuration() ?? '0') ?? 0.0,
-        fileSizeBytes: await File(path).length(),
+        fileSizeBytes: await _fileSizeOf(path),
       );
       debugPrint('[VP] probe: codec=${meta.videoCodec}/${meta.audioCodec} '
           '${meta.width}x${meta.height} fps=${meta.fps.toStringAsFixed(2)} '
@@ -520,6 +520,14 @@ class VideoProcessor {
       outputSizeBytes: size,
       metadata: meta,
     );
+  }
+
+  Future<int> _fileSizeOf(String path) async {
+    try {
+      return await File(path).length();
+    } catch (_) {
+      return 0;
+    }
   }
 
   double _parseFrac(String frac) {
