@@ -484,32 +484,6 @@ class _AppBar extends StatelessWidget {
               ),
             ]
           : [
-              GestureDetector(
-                onTap: onCycleGroup,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withAlpha(isDark ? 50 : 25),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      groupModeLabel,
-                      style: AppTypography.dmSans(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              IconButton(
-                icon: Icon(Icons.search_rounded,
-                    color: Theme.of(context).colorScheme.onSurface),
-                onPressed: onSearch,
-              ),
               IconButton(
                 icon: Icon(Icons.menu_rounded,
                     color: Theme.of(context).colorScheme.onSurface),
@@ -879,49 +853,61 @@ class _FloatingFilterPills extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const filters = <(String, MediaType?)>[
-      ('All', null),
-      ('Videos', MediaType.video),
-      ('Photos', MediaType.image),
-    ];
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _Pill(
+          label: 'All',
+          isActive: true,
+          onTap: () => onFilter(null),
+        ),
+        const SizedBox(width: 10),
+        _Pill(
+          label: 'Album',
+          isActive: false,
+          onTap: () => context.go(Routes.albums),
+        ),
+      ],
+    );
+  }
+}
 
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1C1C1E),
-        borderRadius: BorderRadius.circular(50),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(80),
-            blurRadius: 24,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: filters.map((f) {
-          final isActive = activeFilter == f.$2;
-          return GestureDetector(
-            onTap: () => onFilter(f.$2),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 9),
-              decoration: BoxDecoration(
-                color: isActive ? Colors.white : Colors.transparent,
-                borderRadius: BorderRadius.circular(50),
-              ),
-              child: Text(
-                f.$1,
-                style: AppTypography.dmSans(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: isActive ? const Color(0xFF1C1C1E) : Colors.white60,
-                ),
-              ),
+class _Pill extends StatelessWidget {
+  final String label;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _Pill({
+    required this.label,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+        decoration: BoxDecoration(
+          color: isActive ? AppColors.primary : Colors.white.withAlpha(220),
+          borderRadius: BorderRadius.circular(50),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(30),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
             ),
-          );
-        }).toList(),
+          ],
+        ),
+        child: Text(
+          label,
+          style: AppTypography.dmSans(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: isActive ? Colors.white : const Color(0xFF1C1C1E),
+          ),
+        ),
       ),
     );
   }
