@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:share_plus/share_plus.dart';
-import '../../../../core/router/routes.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/constants/app_spacing.dart';
@@ -41,7 +40,6 @@ class ResultPage extends StatefulWidget {
 class _ResultPageState extends State<ResultPage>
     with SingleTickerProviderStateMixin {
   late final AnimationController _entryController;
-  late final Animation<double> _scaleAnim;
   late final Animation<double> _fadeAnim;
   bool _sharing = false;
   bool _saving = false;
@@ -55,11 +53,7 @@ class _ResultPageState extends State<ResultPage>
     super.initState();
     _entryController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 700),
-    );
-    _scaleAnim = CurvedAnimation(
-      parent: _entryController,
-      curve: Curves.elasticOut,
+      duration: const Duration(milliseconds: 500),
     );
     _fadeAnim = CurvedAnimation(
       parent: _entryController,
@@ -226,29 +220,80 @@ class _ResultPageState extends State<ResultPage>
         _originalThumb != null &&
         widget.args?.outputBytes != null;
 
+    final origBytes = widget.args?.originalSizeBytes ?? 0;
+    final outBytes = _isVideo
+        ? (widget.args?.videoPaths?.fold<int>(
+                0,
+                (s, p) =>
+                    s + (File(p).existsSync() ? File(p).lengthSync() : 0)) ??
+            0)
+        : (widget.args?.outputBytes?.length ?? origBytes);
+
     return Scaffold(
       backgroundColor:
           isDark ? AppColors.darkBackground : AppColors.background,
       body: SafeArea(
         child: Column(
           children: [
-            // Top bar
+            // Top bar — back arrow + platform name + ready badge
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              padding: const EdgeInsets.fromLTRB(8, 4, 16, 4),
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.close_rounded, size: 22),
-                    onPressed: () => context.go(Routes.gallery),
+                    icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+                    onPressed: () => context.pop(),
                   ),
                   Expanded(
-                    child: Text(
-                      'Done',
-                      style: AppTypography.outfit(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: preset.color.withAlpha(isDark ? 45 : 28),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(preset.icon, color: preset.color, size: 15),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          preset.name,
+                          style: AppTypography.outfit(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF34C759).withAlpha(isDark ? 40 : 22),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.check_rounded,
+                            color: Color(0xFF34C759), size: 13),
+                        const SizedBox(width: 4),
+                        Text(
+                          widget.args?.bypassed == true
+                              ? 'Already optimal'
+                              : _isMultiClip
+                                  ? '${widget.args!.videoPaths!.length} clips'
+                                  : 'Ready',
+                          style: AppTypography.dmSans(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF34C759),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -258,6 +303,7 @@ class _ResultPageState extends State<ResultPage>
             Expanded(
               child: SingleChildScrollView(
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
 
             // Before/After slider — image results only
@@ -273,86 +319,52 @@ class _ResultPageState extends State<ResultPage>
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
             ] else ...[
-              const SizedBox(height: 24),
+              const SizedBox(height: 12),
             ],
 
-            // Success illustration — smaller when slider is shown
-            FadeTransition(
-              opacity: _fadeAnim,
-              child: ScaleTransition(
-                scale: _scaleAnim,
-                child: _SuccessIcon(preset: preset, compact: showSlider),
-              ),
-            ),
-
-            SizedBox(height: showSlider ? 16 : 28),
-
-            // Title
-            FadeTransition(
-              opacity: _fadeAnim,
-              child: Text(
-                'All set!',
-                style: AppTypography.outfit(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w700,
-                  color: Theme.of(context).colorScheme.onSurface,
-                  letterSpacing: -0.3,
+            // Size comparison row
+            if (origBytes > 0)
+              FadeTransition(
+                opacity: _fadeAnim,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.lg),
+                  child: _SizeCompareRow(
+                    isDark: isDark,
+                    originalBytes: origBytes,
+                    outputBytes: outBytes,
+                    bypassed: widget.args?.bypassed == true,
+                  ),
                 ),
               ),
-            ),
 
-            const SizedBox(height: 8),
-
-            FadeTransition(
-              opacity: _fadeAnim,
-              child: Text(
-                _isMultiClip
-                    ? 'Split into ${widget.args!.videoPaths!.length} clips for ${preset.name}'
-                    : _isVideo
-                        ? widget.args?.bypassed == true
-                            ? 'Video already optimal for ${preset.name}'
-                            : 'Video ready for ${preset.name}'
-                        : widget.args?.bypassed == true
-                            ? 'Already perfect for ${preset.name}'
-                            : 'Optimized for ${preset.name}',
-                style: AppTypography.dmSans(
-                  fontSize: 14,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 32),
+            const SizedBox(height: 16),
 
             // Stats row
             FadeTransition(
               opacity: _fadeAnim,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
                 child: Row(
                   children: [
                     _StatCard(
                       isDark: isDark,
-                      label: widget.args?.bypassed == true
-                          ? 'Already optimal'
-                          : 'Size reduction',
+                      label: 'Size saved',
                       value: _sizeReductionLabel,
-                      icon: widget.args?.bypassed == true
-                          ? Icons.verified_rounded
-                          : Icons.compress_rounded,
+                      icon: Icons.compress_rounded,
                       color: AppColors.success,
                     ),
                     const SizedBox(width: 12),
                     _StatCard(
                       isDark: isDark,
-                      label: _isVideo ? 'Codec' : 'Quality score',
+                      label: _isVideo ? 'Codec' : 'Quality',
                       value: _qualityLabel,
                       icon: _isVideo
                           ? Icons.videocam_rounded
-                          : Icons.stars_rounded,
-                      color: AppColors.violet,
+                          : Icons.hd_rounded,
+                      color: preset.color,
                     ),
                   ],
                 ),
@@ -486,10 +498,10 @@ class _ResultPageState extends State<ResultPage>
             ],
 
                     const SizedBox(height: 32),
-                  ], // end inner Column children
-                ), // end inner Column
-              ), // end SingleChildScrollView
-            ), // end Expanded
+                  ],
+                ),
+              ),
+            ),
 
             // Action buttons — pinned outside scroll so always visible
             Padding(
@@ -614,57 +626,111 @@ class _ResultPageState extends State<ResultPage>
   }
 }
 
-class _SuccessIcon extends StatelessWidget {
-  final PlatformPreset preset;
-  final bool compact;
-  const _SuccessIcon({required this.preset, this.compact = false});
+class _SizeCompareRow extends StatelessWidget {
+  final bool isDark;
+  final int originalBytes;
+  final int outputBytes;
+  final bool bypassed;
+
+  const _SizeCompareRow({
+    required this.isDark,
+    required this.originalBytes,
+    required this.outputBytes,
+    required this.bypassed,
+  });
+
+  String _fmt(int bytes) {
+    if (bytes >= 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+    return '${(bytes / 1024).toStringAsFixed(0)} KB';
+  }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final size = compact ? 72.0 : 120.0;
-    final iconSize = compact ? 36.0 : 60.0;
-    final radius = compact ? 22.0 : 36.0;
-    final badgeSize = compact ? 28.0 : 42.0;
-    final badgeIconSize = compact ? 13.0 : 20.0;
+    final pct = originalBytes > 0
+        ? ((1 - outputBytes / originalBytes) * 100).round()
+        : 0;
+    final saved = pct > 0;
 
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            gradient: AppColors.brandGradient,
-            borderRadius: BorderRadius.circular(radius),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withAlpha(80),
-                blurRadius: compact ? 16 : 32,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Icon(Icons.check_rounded, color: Colors.white, size: iconSize),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurface : AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? AppColors.darkOutline : AppColors.outline,
+          width: 0.5,
         ),
-        Positioned(
-          bottom: -8,
-          right: -8,
-          child: Container(
-            width: badgeSize,
-            height: badgeSize,
-            decoration: BoxDecoration(
-              color: preset.color.withAlpha(isDark ? 50 : 30),
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: isDark ? AppColors.darkBackground : AppColors.background,
-                width: 3,
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.insert_drive_file_rounded,
+            size: 16,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 10),
+          Text(
+            _fmt(originalBytes),
+            style: AppTypography.dmSans(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Icon(
+              Icons.arrow_forward_rounded,
+              size: 14,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          Text(
+            _fmt(outputBytes),
+            style: AppTypography.dmSans(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+          const Spacer(),
+          if (bypassed)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withAlpha(isDark ? 40 : 22),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                'Already optimal',
+                style: AppTypography.dmSans(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.primary,
+                ),
+              ),
+            )
+          else if (saved)
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF34C759).withAlpha(isDark ? 40 : 22),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                '-$pct%',
+                style: AppTypography.dmSans(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF34C759),
+                ),
               ),
             ),
-            child: Icon(preset.icon, color: preset.color, size: badgeIconSize),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
