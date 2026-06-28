@@ -230,36 +230,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
             ),
             const SizedBox(height: AppSpacing.lg),
-
-            _SectionLabel('Optimization'),
-            _SettingsCard(
-              isDark: isDark,
-              children: [
-                _SettingsTile(
-                  isDark: isDark,
-                  icon: Icons.tune_rounded,
-                  iconColor: AppColors.success,
-                  title: 'Default platform',
-                  subtitle: _defaultPlatformName,
-                  trailing: const Icon(Icons.chevron_right_rounded,
-                      size: 20, color: AppColors.muted),
-                  onTap: () => _showPlatformSheet(context, isDark),
-                ),
-                _TileDivider(isDark: isDark),
-                _SettingsTile(
-                  isDark: isDark,
-                  icon: Icons.high_quality_rounded,
-                  iconColor: AppColors.coral,
-                  title: 'Quality mode',
-                  subtitle: _qualityMode,
-                  trailing: const Icon(Icons.chevron_right_rounded,
-                      size: 20, color: AppColors.muted),
-                  onTap: () => _showQualitySheet(context, isDark),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.lg),
-
+            
             _SectionLabel('Storage'),
             _SettingsCard(
               isDark: isDark,
